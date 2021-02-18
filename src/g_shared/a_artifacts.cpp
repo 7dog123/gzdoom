@@ -496,18 +496,24 @@ int APowerInvulnerable::AlterWeaponSprite (visstyle_t *vis)
 
 IMPLEMENT_CLASS (APowerStrength)
 
+//[GEC]
+#define ST_MAXSTRCOUNT  32
+#define NUMREDPALS		8
+#define MAXFADE			90
+static int fadecount = 0;
+
+
 //===========================================================================
 //
 // APowerStrength :: HandlePickup
 //
 //===========================================================================
-
 bool APowerStrength::HandlePickup (AInventory *item)
 {
 	if (item->GetClass() == GetClass())
 	{ // Setting EffectTics to 0 will force Powerup's HandlePickup()
 	  // method to reset the tic count so you get the red flash again.
-		EffectTics = 0;
+			EffectTics = 0;
 	}
 	return Super::HandlePickup (item);
 }
@@ -534,6 +540,12 @@ void APowerStrength::Tick ()
 	// Strength counts up to diminish the fade.
 	assert(EffectTics < (INT_MAX - 1)); // I can't see a game lasting nearly two years, but...
 	EffectTics += 2;
+
+	if(Mode == NAME_D64)//[GEC]
+	{
+		fadecount = clamp<int>((MAXFADE - (EffectTics >> 0)), 0, MAXFADE);
+	}
+
 	Super::Tick();
 }
 
@@ -545,14 +557,39 @@ void APowerStrength::Tick ()
 
 PalEntry APowerStrength::GetBlend ()
 {
+	// slowly fade the berzerk out
+	if (Mode == NAME_D64)//[GEC]
+	{
+		if (fadecount > 1)
+		{
+			int cnt = fadecount;
+
+			if (cnt == 1) {
+				cnt = 0;
+			}
+			else if (cnt > BlendColor.a) {//ST_MAXSTRCOUNT
+				cnt = BlendColor.a;//ST_MAXSTRCOUNT
+			}
+
+			return PalEntry ((cnt & 0xff), BlendColor.r, BlendColor.g, BlendColor.b);
+		}
+		return 0;
+	}
+
 	// slowly fade the berserk out
 	int cnt = 12 - (EffectTics >> 6);
 
 	if (cnt > 0)
 	{
 		cnt = (cnt + 7) >> 3;
-		return PalEntry (BlendColor.a*cnt*255/9,
-			BlendColor.r, BlendColor.g, BlendColor.b);
+
+		if (Mode == NAME_Psx)//[GEC]
+		{
+			if (cnt >= NUMREDPALS)
+				cnt = NUMREDPALS-1;
+		}
+
+		return PalEntry (BlendColor.a*cnt*255/9, BlendColor.r, BlendColor.g, BlendColor.b);
 	}
 	return 0;
 }
@@ -873,6 +910,31 @@ void APowerLightAmp::EndEffect ()
 	if (Owner != NULL && Owner->player != NULL && Owner->player->fixedcolormap < NUMCOLORMAPS)
 	{
 		Owner->player->fixedlightlevel = -1;
+	}
+}
+
+
+// [GEC]Light-Amp 64 Powerup ---------------------------------------------------------
+
+IMPLEMENT_CLASS (APowerD64LightAmp)
+
+//===========================================================================
+//
+// APowerD64LightAmp :: DoEffect
+//
+//===========================================================================
+
+void APowerD64LightAmp::DoEffect ()
+{
+	Super::DoEffect ();
+
+	if (Owner->player != NULL)
+	{
+		if (EffectTics)
+		{	
+			infraredFactor = 300;
+            R_RefreshBrightness();
+		}
 	}
 }
 

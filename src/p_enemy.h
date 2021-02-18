@@ -34,6 +34,7 @@ enum LO_Flags
 	LOF_NOSEESOUND = 8,
 	LOF_FULLVOLSEESOUND = 16,
     LOF_NOJUMP = 32,
+	LOF_KILLABLETARGET = 64,//[GEC]
 };
 
 struct FLookExParams

@@ -356,6 +356,7 @@ int FMugShot::UpdateState(player_t *player, StateFlags stateflags)
 		bEvilGrin = false;
 
 		bool ouch = (!st_oldouch && FaceHealth - player->health > ST_MUCHPAIN) || (st_oldouch && player->health - FaceHealth > ST_MUCHPAIN);
+
 		if (player->damagecount && 
 			// Now go in if pain is disabled but we think ouch will be shown (and ouch is not disabled!)
 			(!(stateflags & DISABLEPAIN) || (((FaceHealth != -1 && ouch) || bOuchActive) && !(stateflags & DISABLEOUCH))))
@@ -408,6 +409,24 @@ int FMugShot::UpdateState(player_t *player, StateFlags stateflags)
 			}
 			return damage_angle;
 		}
+		else if (player->secdamage && !ouch && (player->mo->PlayerFlags & PPF_PAINFACEONSECTORDAMAGE))//[GEC]
+		{
+			bool godmode = false;
+			if ((player->cheats & CF_GODMODE) || (player->cheats & CF_GODMODE2)  || (player->mo != NULL && player->mo->flags2 & MF2_INVULNERABLE) )
+			{
+				godmode = true;
+			}
+			
+			if(!godmode)
+			{
+				bDamageFaceActive = (CurrentState != NULL);
+				SetState("pain.", false, true);
+				LastDamageAngle = 1;
+				bOuchActive = false;
+				return 1;
+			}
+		}
+
 		if (bDamageFaceActive)
 		{
 			if (CurrentState == NULL)
@@ -435,7 +454,9 @@ int FMugShot::UpdateState(player_t *player, StateFlags stateflags)
 			}
 		}
 
-		if (RampageTimer == ST_RAMPAGEDELAY && !(stateflags & DISABLERAMPAGE))
+		AWeapon *weapon = player->ReadyWeapon;//[GEC]
+
+		if (RampageTimer == ST_RAMPAGEDELAY && !(stateflags & DISABLERAMPAGE) && !(weapon->WeaponFlags & WIF_GEC_NORAMPAGE))//[GEC]
 		{
 			SetState("rampage", !bNormal); //If we have nothing better to show, use the rampage face.
 			return 0;
@@ -468,6 +489,12 @@ int FMugShot::UpdateState(player_t *player, StateFlags stateflags)
 		{
 			full_state_name = "xdeath.";
 		}
+
+		if ((stateflags & XDEATHFACE) && (player->mo->state == player->mo->FindState("Crush"))) //[GEC]Crush face death
+		{
+			full_state_name = "xdeath.";
+		}
+
 		full_state_name += player->LastDamageType;
 		SetState(full_state_name);
 		bNormal = true; //Allow the face to return to alive states when the player respawns.

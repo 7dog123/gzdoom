@@ -525,6 +525,9 @@ bool GLWall::DoHorizon(seg_t * seg,sector_t * fs, vertex_t * v1,vertex_t * v2)
 				hi.colormap.LightColor = (light->extra_colormap)->Color;
 			}
 
+			hi.lightlevel64 = fs->lightlevel_64;//[GEC]
+			hi.colormap.LightColorMul(fs->SpecialColors[sector_t::ceiling]);//[GEC]
+
 			if (gl_fixedcolormap) hi.colormap.GetFixedColormap();
 			horizon = &hi;
 			PutWall(0);
@@ -553,6 +556,9 @@ bool GLWall::DoHorizon(seg_t * seg,sector_t * fs, vertex_t * v1,vertex_t * v2)
 				if(!(fs->GetFlags(sector_t::floor)&PLANEF_ABSLIGHTING)) hi.lightlevel = gl_ClampLight(*light->p_lightlevel);
 				hi.colormap.LightColor = (light->extra_colormap)->Color;
 			}
+
+			hi.lightlevel64 = fs->lightlevel_64;//[GEC]
+			hi.colormap.LightColorMul(fs->SpecialColors[sector_t::floor]);//[GEC]
 
 			if (gl_fixedcolormap) hi.colormap.GetFixedColormap();
 			horizon=&hi;
@@ -705,11 +711,11 @@ void GLWall::CheckTexturePosition()
 	// Extremely large values can cause visual problems
 	if (uplft.v < uprgt.v)
 	{
-		sub = float(xs_FloorToInt(uplft.v));
+		sub = float(xs_FloorToInt(uplft.v)) * 2;//[GEC] uv_mirrors
 	}
 	else
 	{
-		sub = float(xs_FloorToInt(uprgt.v));
+		sub = float(xs_FloorToInt(uprgt.v)) * 2;//[GEC] uv_mirrors
 	}
 	uplft.v -= sub;
 	uprgt.v -= sub;
@@ -760,8 +766,34 @@ void GLWall::DoTexture(int _type,seg_t * seg, int peg,
 
 	type = (seg->linedef->special == Line_Mirror && _type == RENDERWALL_M1S && gl_mirrors) ? RENDERWALL_MIRROR : _type;
 
-	float floatceilingref = FIXED2FLOAT(ceilingrefheight + tci.RowOffset(seg->sidedef->GetTextureYOffset(texpos)));
+	fixed_t rowoffs = tci.RowOffset(seg->sidedef->GetTextureYOffset(texpos));//[GEC]
+
+	if(seg->linedef->gecflags & ML_UV_WRAP_V_MIRROR && texpos == 0 && !(seg->linedef->flags & ML_DONTPEGTOP))//[GEC]
+	{
+		float height = (float) gltexture->GetHeight(GLUSE_TEXTURE);
+		rowoffs += height* FRACUNIT;
+    }
+
+	if(seg->linedef->gecflags & ML_UV_WRAP_V_MIRROR && texpos == 1 && (seg->linedef->flags & ML_DONTPEGBOTTOM))//[GEC]
+	{
+		float height = (float) gltexture->GetHeight(GLUSE_TEXTURE);
+		rowoffs += height* FRACUNIT;
+    }
+
+	if(seg->linedef->gecflags & ML_UV_WRAP_V_MIRROR && texpos == 2 && (seg->linedef->flags & ML_DONTPEGBOTTOM))//[GEC]
+	{
+		float height = (float) gltexture->GetHeight(GLUSE_TEXTURE);
+		rowoffs -= height* FRACUNIT;
+    }
+
+	//float floatceilingref = FIXED2FLOAT(ceilingrefheight + tci.RowOffset(seg->sidedef->GetTextureYOffset(texpos)));
+	float floatceilingref = FIXED2FLOAT(ceilingrefheight + rowoffs);
 	if (peg) floatceilingref += tci.mRenderHeight - FIXED2FLOAT(lh + v_offset);
+
+	if(seg->linedef->gecflags & ML_DONTPEGMIDDLE  && !seg->linedef->backsector && texpos == 1)// [GEC] Nuevo middle texture unpegged
+	{
+		floatceilingref = 0;
+	}
 
 	if (!SetWallCoordinates(seg, &tci, floatceilingref, topleft, topright, bottomleft, bottomright, 
 							seg->sidedef->GetTextureXOffset(texpos))) return;
@@ -798,6 +830,13 @@ void GLWall::DoMidTexture(seg_t * seg, bool drawfogboundary,
 	fixed_t texturetop, texturebottom;
 	bool wrap = (seg->linedef->flags&ML_WRAP_MIDTEX) || (seg->sidedef->Flags&WALLF_WRAP_MIDTEX);
 
+	//---------[GEC]--------START----------//
+	bool clip = (seg->linedef->flags&ML_CLIP_MIDTEX) || (seg->sidedef->Flags&ML_CLIP_MIDTEX);
+	int zheight = 0;
+	int zheightA = 0;
+	int zheightB = 0;
+	//---------[GEC]--------END------------//
+
 	//
 	//
 	// Get the base coordinates for the texture
@@ -810,6 +849,13 @@ void GLWall::DoMidTexture(seg_t * seg, bool drawfogboundary,
 
 		gltexture->GetTexCoordInfo(&tci, seg->sidedef->GetTextureXScale(side_t::mid), seg->sidedef->GetTextureYScale(side_t::mid));
 		fixed_t rowoffset = tci.RowOffset(seg->sidedef->GetTextureYOffset(side_t::mid));
+
+		if(seg->linedef->gecflags & ML_UV_WRAP_V_MIRROR && (seg->linedef->flags & ML_DONTPEGBOTTOM))//[GEC]
+		{
+			float height = (float) gltexture->GetHeight(GLUSE_TEXTURE);
+			rowoffset += height* FRACUNIT;
+		}
+
 		if ( (seg->linedef->flags & ML_DONTPEGBOTTOM) >0)
 		{
 			texturebottom = MAX(realfront->GetPlaneTexZ(sector_t::floor),realback->GetPlaneTexZ(sector_t::floor))+rowoffset;
@@ -836,6 +882,16 @@ void GLWall::DoMidTexture(seg_t * seg, bool drawfogboundary,
 		// Set up the top
 		//
 		//
+
+		//---------[GEC]--------START----------//
+		if (clip)
+		{
+			zheight = -(realfront->GetPlaneTexZ(sector_t::ceiling) - realback->GetPlaneTexZ(sector_t::ceiling)) / FRACUNIT;//[GEC]
+			zheightA = zheight - (((fch1 - bch1) / FRACUNIT) + zheight);//[GEC]
+			zheightB = zheight - (((fch2 - bch2) / FRACUNIT) + zheight);//[GEC]
+		}
+		//---------[GEC]--------END------------//
+
 		FTexture * tex = TexMan(seg->sidedef->GetTexture(side_t::top));
 		if (!tex || tex->UseType==FTexture::TEX_Null)
 		{
@@ -848,8 +904,10 @@ void GLWall::DoMidTexture(seg_t * seg, bool drawfogboundary,
 			else
 			{
 				// texture is missing - use the higher plane
-				topleft = MAX(bch1,fch1);
-				topright = MAX(bch2,fch2);
+				//topleft = MAX(bch1,fch1);
+				//topright = MAX(bch2,fch2);
+				topleft = MAX(bch1, fch1) - (zheightA << 16);//[GEC]
+				topright = MAX(bch2, fch2) - (zheightB << 16);//[GEC]
 			}
 		}
 		else if ((bch1>fch1 || bch2>fch2) && 
@@ -872,12 +930,25 @@ void GLWall::DoMidTexture(seg_t * seg, bool drawfogboundary,
 		// Set up the bottom
 		//
 		//
+
+		//---------[GEC]--------START----------//
+		if (clip)
+		{
+			zheight = (realback->GetPlaneTexZ(sector_t::floor) - realfront->GetPlaneTexZ(sector_t::floor)) / FRACUNIT;//[GEC]
+			zheightA = zheight + (((bfh1 - ffh1) / FRACUNIT) - zheight);//[GEC]
+			zheightB = zheight + (((bfh2 - ffh2) / FRACUNIT) - zheight);//[GEC]
+		}
+		//---------[GEC]--------END------------//
+
 		tex = TexMan(seg->sidedef->GetTexture(side_t::bottom));
 		if (!tex || tex->UseType==FTexture::TEX_Null)
 		{
 			// texture is missing - use the lower plane
-			bottomleft = MIN(bfh1,ffh1);
-			bottomright = MIN(bfh2,ffh2);
+			//bottomleft = MIN(bfh1,ffh1);
+			//bottomright = MIN(bfh2,ffh2);
+
+			bottomleft = MIN(bfh1, ffh1) - (zheightA << 16);//[GEC]
+			bottomright = MIN(bfh2, ffh2) - (zheightB << 16);//[GEC]
 		}
 		else if (bfh1<ffh1 || bfh2<ffh2) // (!((bfh1<=ffh1 && bfh2<=ffh2) || (bfh1>=ffh1 && bfh2>=ffh2)))
 		{
@@ -933,6 +1004,8 @@ void GLWall::DoMidTexture(seg_t * seg, bool drawfogboundary,
 	{
 		// First adjust the texture offset so that the left edge of the linedef is inside the range [0..1].
 		fixed_t texwidth = tci.TextureAdjustWidth()<<FRACBITS;
+
+		texwidth *= 2;//[GEC] uv_mirrors
 		
 		t_ofs%=texwidth;
 		if (t_ofs<-texwidth) t_ofs+=texwidth;	// shift negative results of % into positive range
@@ -1432,6 +1505,479 @@ void GLWall::DoFFloorBlocks(seg_t * seg,sector_t * frontsector,sector_t * backse
 	
 //==========================================================================
 //
+// [GEC] SetWallColors
+//
+//==========================================================================
+
+void GLWall::SetWallColors(seg_t *seg, bool forcethingcolor)
+{
+	if (seg->linedef->gecflags & ML_USE_MULTICOLORS && !forcethingcolor)
+	{
+		Wallcolor[1] = Wallcolor[2] = (seg->frontsector->SpecialColors[sector_t::walltop]/* | 0xff000000*/);
+		Wallcolor[0] = Wallcolor[3] = (seg->frontsector->SpecialColors[sector_t::wallbottom]/* | 0xff000000*/);
+	}
+	else
+	{
+		Wallcolor[0] = Wallcolor[1] = Wallcolor[2] = Wallcolor[3] = seg->frontsector->SpecialColors[sector_t::sprites];
+	}
+}
+
+//==========================================================================
+//
+// [GEC] R_SplitLineColor
+//
+//==========================================================================
+#define minc(a,b)	((a)<(b)?(a):(b))
+void GLWall::R_SplitLineColor(int type, float FCH, float FFH,
+		float ffh1, float ffh2, float fch1, float fch2,
+		float bfh1, float bfh2, float bch1, float bch2)
+{
+	float height = 0;
+	float sideheight1 = 0;
+	float sideheight2 = 0;
+	float sideheight3 = 0;
+	float sideheight4 = 0;
+	float r1, g1, b1 = 0;
+	float r2, g2, b2 = 0;
+	float r3, g3, b3 = 0;
+	float r4, g4, b4 = 0;
+	int r, g, b = 0;
+	PalEntry ColorA;
+	PalEntry ColorB;
+	PalEntry ColorC;
+	PalEntry ColorD;
+
+	ColorA = Wallcolor[1];
+	ColorB = Wallcolor[0];
+	ColorC = Wallcolor[2];
+	ColorD = Wallcolor[3];
+
+	r1 = (float)ColorA.r;
+	g1 = (float)ColorA.g;
+	b1 = (float)ColorA.b;
+
+	r2 = (float)ColorB.r;
+	g2 = (float)ColorB.g;
+	b2 = (float)ColorB.b;
+
+	r3 = (float)ColorC.r;
+	g3 = (float)ColorC.g;
+	b3 = (float)ColorC.b;
+
+	r4 = (float)ColorD.r;
+	g4 = (float)ColorD.g;
+	b4 = (float)ColorD.b;
+
+	height = (FCH - FFH);
+
+	if (type == RENDERWALL_TOP)
+	{
+		sideheight1 = (bch1 - ffh1);
+		sideheight2 = (fch1 - bch1);
+		sideheight3 = (bch2 - ffh2);
+		sideheight4 = (fch2 - bch2);
+	}
+	else if (type == RENDERWALL_BOTTOM)
+	{
+		sideheight1 = (bfh1 - FFH);
+		sideheight2 = (FCH - bfh1);
+		sideheight3 = (bfh2 - FFH);
+		sideheight4 = (FCH - bfh2);
+	}
+
+	r1 = ((r1 / height)*sideheight1);
+	g1 = ((g1 / height)*sideheight1);
+	b1 = ((b1 / height)*sideheight1);
+
+	r2 = ((r2 / height)*sideheight2);
+	g2 = ((g2 / height)*sideheight2);
+	b2 = ((b2 / height)*sideheight2);
+
+	r3 = ((r3 / height)*sideheight3);
+	g3 = ((g3 / height)*sideheight3);
+	b3 = ((b3 / height)*sideheight3);
+
+	r4 = ((r4 / height)*sideheight4);
+	g4 = ((g4 / height)*sideheight4);
+	b4 = ((b4 / height)*sideheight4);
+
+	if (type == RENDERWALL_TOP)
+	{
+		r = (int)minc((r1 + r2), 0xff);
+		g = (int)minc((g1 + g2), 0xff);
+		b = (int)minc((b1 + b2), 0xff);
+		Wallcolor[0] = PalEntry(r, g, b);
+
+		r = (int)minc((r3 + r4), 0xff);
+		g = (int)minc((g3 + g4), 0xff);
+		b = (int)minc((b3 + b4), 0xff);
+		Wallcolor[3] = PalEntry(r, g, b);
+	}
+	else if (type == RENDERWALL_BOTTOM)
+	{
+		r = (int)minc((r1 + r2), 0xff);
+		g = (int)minc((g1 + g2), 0xff);
+		b = (int)minc((b1 + b2), 0xff);
+		Wallcolor[1] = PalEntry(r, g, b);
+
+		r = (int)minc((r3 + r4), 0xff);
+		g = (int)minc((g3 + g4), 0xff);
+		b = (int)minc((b3 + b4), 0xff);
+		Wallcolor[2] = PalEntry(r, g, b);
+	}
+}
+
+//==========================================================================
+//
+// [GEC] R_SetSegLineColor
+//
+//==========================================================================
+
+void GLWall::R_SetSegLineColor(seg_t * seg, int side, fixed_t FCH, fixed_t FFH,
+		fixed_t ffh1, fixed_t ffh2, fixed_t fch1, fixed_t fch2,
+		fixed_t bfh1, fixed_t bfh2, fixed_t bch1, fixed_t bch2)
+{
+	PalEntry colorA, colorB, colorC, colorD;
+	PalEntry colorA2, colorB2, colorC2, colorD2;
+
+	SetWallColors(seg);
+
+	colorA = colorA2 = Wallcolor[1];
+	colorB = colorB2 = Wallcolor[2];
+	colorC = colorC2 = Wallcolor[0];
+	colorD = colorD2 = Wallcolor[3];
+
+	if (seg->linedef->gecflags & ML_USE_MULTICOLORS)
+	{
+		if (seg->backsector && side != 0)
+		{
+
+			if (!(seg->linedef->gecflags & ML_PEG_UPPER_WALL_COLOR) && side == 1)
+			{
+				R_SplitLineColor(RENDERWALL_TOP, FIXED2FLOAT(FCH), FIXED2FLOAT(FFH),
+				FIXED2FLOAT(ffh1), FIXED2FLOAT(ffh2), FIXED2FLOAT(fch1), FIXED2FLOAT(fch2),
+				FIXED2FLOAT(bfh1), FIXED2FLOAT(bfh2), FIXED2FLOAT(bch1), FIXED2FLOAT(bch2));
+
+				colorC = Wallcolor[0];
+				colorD = Wallcolor[3];
+			}
+			else
+			{
+				if (side == 1 && seg->linedef->gecflags & ML_FLIP_UPPER_PEGGED_COLOR)
+				{
+					colorC = colorA2;
+					colorD = colorB2;
+				}
+			}
+
+			if (!(seg->linedef->gecflags & ML_PEG_LOWER_WALL_COLOR) && side == 2)
+			{
+				R_SplitLineColor(RENDERWALL_BOTTOM, FIXED2FLOAT(FCH), FIXED2FLOAT(FFH),
+				FIXED2FLOAT(ffh1), FIXED2FLOAT(ffh2), FIXED2FLOAT(fch1), FIXED2FLOAT(fch2),
+				FIXED2FLOAT(bfh1), FIXED2FLOAT(bfh2), FIXED2FLOAT(bch1), FIXED2FLOAT(bch2));
+
+				colorA = Wallcolor[1];
+				colorB = Wallcolor[2];
+			}
+			else
+			{
+				if (side == 1 && seg->linedef->gecflags & ML_FLIP_UPPER_PEGGED_COLOR)
+				{
+					colorA = colorC2;
+					colorB = colorD2;
+				}
+			}
+
+			if (side == 3)// midtexture
+			{
+				if (seg->backsector->GetPlaneTexZ(sector_t::ceiling) < seg->frontsector->GetPlaneTexZ(sector_t::ceiling))
+				{
+					R_SplitLineColor(RENDERWALL_TOP, FIXED2FLOAT(FCH), FIXED2FLOAT(FFH),
+					FIXED2FLOAT(ffh1), FIXED2FLOAT(ffh2), FIXED2FLOAT(fch1), FIXED2FLOAT(fch2),
+					FIXED2FLOAT(bfh1), FIXED2FLOAT(bfh2), FIXED2FLOAT(bch1), FIXED2FLOAT(bch2));
+
+					colorA = Wallcolor[0];
+					colorB = Wallcolor[3];
+				}
+				else
+				{
+					colorA = Wallcolor[1];
+					colorB = Wallcolor[2];
+				}
+
+				//[GEC]Reset Colors
+				Wallcolor[0] = colorC;
+				Wallcolor[3] = colorD;
+				if (seg->backsector->GetPlaneTexZ(sector_t::floor) > seg->frontsector->GetPlaneTexZ(sector_t::floor))
+				{
+					R_SplitLineColor(RENDERWALL_BOTTOM, FIXED2FLOAT(FCH), FIXED2FLOAT(FFH),
+					FIXED2FLOAT(ffh1), FIXED2FLOAT(ffh2), FIXED2FLOAT(fch1), FIXED2FLOAT(fch2),
+					FIXED2FLOAT(bfh1), FIXED2FLOAT(bfh2), FIXED2FLOAT(bch1), FIXED2FLOAT(bch2));
+
+					colorC = Wallcolor[1];
+					colorD = Wallcolor[2];
+				}
+				else {
+					colorC = Wallcolor[0];
+					colorD = Wallcolor[3];
+				}
+			}
+		}
+		else
+		{
+			colorA = Wallcolor[1];
+			colorB = Wallcolor[2];
+			colorC = Wallcolor[0];
+			colorD = Wallcolor[3];
+		}
+	}
+
+	// Set new color gradiant
+	Wallcolor[1] = colorA;
+	Wallcolor[2] = colorB;
+	Wallcolor[0] = colorC;
+	Wallcolor[3] = colorD;
+}
+
+//==========================================================================
+//
+// [GEC] R_GenerateSwitchPlane
+//
+//==========================================================================
+
+#define dcos(angle) finecosine[(angle) >> ANGLETOFINESHIFT]
+#define dsin(angle) finesine[(angle) >> ANGLETOFINESHIFT]
+
+bool GLWall::R_GenerateSwitchPlane(seg_t *line)
+{
+	if(!SWITCHMASK(line->linedef->gecflags))
+	{
+        return false;
+    }
+
+	GLSeg glsave = glseg;
+
+	int texpos = 0;
+
+    if(SWITCHMASK(line->linedef->gecflags) == ML_SWITCHX02)
+	{
+		gltexture = FMaterial::ValidateTexture(line->sidedef->GetTexture(side_t::top), true);
+		texpos = side_t::top;
+    }
+    else if(SWITCHMASK(line->linedef->gecflags) == ML_SWITCHX04)
+	{
+		gltexture = FMaterial::ValidateTexture(line->sidedef->GetTexture(side_t::bottom), true);
+		texpos = side_t::bottom;
+    }
+    else
+	{
+        if(!line->backsector)
+		{
+            return false;
+        }
+
+		gltexture = FMaterial::ValidateTexture(line->sidedef->GetTexture(side_t::mid), true);
+		texpos = side_t::mid;
+    }
+	if (!gltexture) return false;
+
+	vertex_t * v1, *v2;
+	vertex_t * vert[2];
+
+    fixed_t     bottom = 0;
+    fixed_t     top = 0;
+    int         offset = 0;
+    fixed_t     cenx;
+    fixed_t     ceny;
+    fixed_t     x1;
+    fixed_t     x2;
+    fixed_t     y1;
+    fixed_t     y2;
+    fixed_t     f1;
+    fixed_t     f2;
+    fixed_t     s1;
+    fixed_t     s2;
+
+	if (seg->sidedef == seg->linedef->sidedef[0])
+	{
+		v1 = seg->linedef->v1;
+		v2 = seg->linedef->v2;
+	}
+	else
+	{
+		v1 = seg->linedef->v2;
+		v2 = seg->linedef->v1;
+	}
+
+	if (abs(v1->x - v2->x) > abs(v1->y - v2->y))
+	{
+		glseg.fracleft = float(seg->v1->x - v1->x) / float(v2->x - v1->x);
+		glseg.fracright = float(seg->v2->x - v1->x) / float(v2->x - v1->x);
+	}
+	else
+	{
+		glseg.fracleft = float(seg->v1->y - v1->y) / float(v2->y - v1->y);
+		glseg.fracright = float(seg->v2->y - v1->y) / float(v2->y - v1->y);
+	}
+	//v1 = seg->v1;
+	//v2 = seg->v2;
+
+	vert[0] = v1;
+	vert[1] = v2;
+
+    cenx = (vert[0]->x + vert[1]->x) >> 1;
+    ceny = (vert[0]->y + vert[1]->y) >> 1;
+
+	fixed_t height = FLOAT2FIXED((float)(gltexture->GetScaledHeightFloat(GLUSE_TEXTURE)));
+	fixed_t width = FLOAT2FIXED((float)(gltexture->GetScaledWidthFloat(GLUSE_TEXTURE)/2));
+
+	angle_t ang = R_PointToAngle2 (vert[0]->x, vert[0]->y, vert[1]->x, vert[1]->y);
+
+    f1 = FixedMul(FLOAT2FIXED(0.5), dcos(ang + ANG90));// 2*FRACUNIT -> FLOAT2FIXED(0.25)
+    f2 = FixedMul(FLOAT2FIXED(0.5), dsin(ang + ANG90));// 2*FRACUNIT -> FLOAT2FIXED(0.25)
+
+    s1 = FixedMul(width, dcos(ang));//16*FRACUNIT -> width
+    s2 = FixedMul(width, dsin(ang));//16*FRACUNIT -> width
+
+    x1 = cenx - s1;
+    x2 = cenx + s1;
+
+    y1 = ceny - s2;
+    y2 = ceny + s2;
+
+    x1 -= f1;
+    x2 -= f1;
+
+    y1 -= f2;
+    y2 -= f2;
+
+	glseg.x1 = FIXED2FLOAT(x1);
+	glseg.y1 = FIXED2FLOAT(y1);
+	glseg.x2 = FIXED2FLOAT(x2);
+	glseg.y2 = FIXED2FLOAT(y2);
+
+	uplft.u = 0.0f;
+	uplft.v = 0.0f;
+
+	lolft.u = 0.0f;
+	lolft.v = 1.0f;
+
+	uprgt.u = 1.0f;
+	uprgt.v = 0.0f;
+
+	lorgt.u = 1.0f;
+	lorgt.v = 1.0f;
+
+    //Switch Use Normal color
+	SetWallColors(seg, true); //[GEC]
+
+	FTexCoordInfo tci;
+
+	gltexture->GetTexCoordInfo(&tci, line->sidedef->GetTextureXScale(texpos), line->sidedef->GetTextureYScale(texpos));
+
+	int rowoffset = tci.RowOffset(line->sidedef->GetTextureYOffset(texpos));
+
+	fixed_t F_floorheight = 0, F_ceilingheight = 0;
+	fixed_t B_floorheight = 0, B_ceilingheight = 0;
+
+	if(line->backsector)
+	{
+		B_floorheight = line->backsector->GetPlaneTexZ(sector_t::floor);
+		B_ceilingheight = line->backsector->GetPlaneTexZ(sector_t::ceiling);
+	}
+
+	F_floorheight = line->frontsector->GetPlaneTexZ(sector_t::floor);
+	F_ceilingheight = line->frontsector->GetPlaneTexZ(sector_t::ceiling);
+
+    if(SWITCHMASK(line->linedef->gecflags) == ML_SWITCHX02)
+	{
+        if(line->backsector)
+		{
+            offset = 16*FRACUNIT - (rowoffset);
+            top = B_floorheight - offset;
+            bottom = top - (height);//(32*FRACUNIT);
+        }
+        else 
+		{
+            offset = 16*FRACUNIT + (rowoffset);
+            bottom = F_floorheight + offset;
+            top = bottom + (height);//(32*FRACUNIT);
+        }
+    }
+	else if(SWITCHMASK(line->linedef->gecflags) == ML_SWITCHX04)
+	{
+        if(line->backsector)
+		{
+            offset = 16*FRACUNIT + (rowoffset);
+            bottom = B_ceilingheight + offset;
+            top = bottom + (height);//(32*FRACUNIT);
+        }
+        else
+		{
+            offset = 16*FRACUNIT + (rowoffset);
+            bottom = F_floorheight + offset;
+            top = bottom + (height);//(32*FRACUNIT);
+        }
+    }
+    else
+	{
+        if(line->backsector)
+		{
+            if(B_floorheight > F_floorheight)
+			{
+                offset = 16*FRACUNIT - (rowoffset);
+                top = B_floorheight - offset;
+                bottom = top - (height);//(32*FRACUNIT);
+            }
+            else if(B_ceilingheight < F_ceilingheight)
+			{
+                offset = 16*FRACUNIT + (rowoffset);
+                bottom = B_ceilingheight + offset;
+                top = bottom + (height);//(32*FRACUNIT);
+            }
+        }
+        else
+		{
+            return false;
+        }
+    }
+	
+	ztop[0] = FIXED2FLOAT(top);
+	ztop[1] = FIXED2FLOAT(top);
+	zbottom[0] = FIXED2FLOAT(bottom);
+	zbottom[1] = FIXED2FLOAT(bottom);
+
+	bool translucent = false;
+
+	if (seg->linedef->Alpha)
+	{
+		switch (line->linedef->flags& ML_ADDTRANS)
+		{
+			case ML_ADDTRANS:
+				RenderStyle=STYLE_Add;
+				alpha=FIXED2FLOAT(line->linedef->Alpha);
+				translucent=true;
+				break;
+			default:
+				RenderStyle=STYLE_Translucent;
+				alpha=FIXED2FLOAT(line->linedef->Alpha);
+				translucent = (line->linedef->Alpha < FRACUNIT) || (gltexture && gltexture->GetTransparent());
+				break;
+		}
+	}
+
+	// switch textures on such lines need special treatment!
+	flags|=GLWF_SKYHACK;
+	type = RENDERWALL_M2S;
+	PutWall(translucent);
+
+	glseg = glsave;
+
+    return true;
+}
+
+//==========================================================================
+//
 // 
 //
 //==========================================================================
@@ -1521,6 +2067,8 @@ void GLWall::Process(seg_t *seg, sector_t * frontsector, sector_t * backsector)
 	Colormap = frontsector->ColorMap;
 	flags = (!gl_isBlack(Colormap.FadeColor) || level.flags&LEVEL_HASFADETABLE)? GLWF_FOGGY : 0;
 
+	SetWallColors(seg); //[GEC]
+
 	int rel = 0;
 	int orglightlevel = gl_ClampLight(frontsector->lightlevel);
 	lightlevel = gl_ClampLight(seg->sidedef->GetLightLevel(!!(flags&GLWF_FOGGY), orglightlevel, false, &rel));
@@ -1597,6 +2145,9 @@ void GLWall::Process(seg_t *seg, sector_t * frontsector, sector_t * backsector)
 				DoTexture(RENDERWALL_M1S, seg, (seg->linedef->flags & ML_DONTPEGBOTTOM) > 0,
 					realfront->GetPlaneTexZ(sector_t::ceiling), realfront->GetPlaneTexZ(sector_t::floor),	// must come from the original!
 					fch1, fch2, ffh1, ffh2, 0);
+
+				//[GEC] Reset Colors
+					SetWallColors(seg); //[GEC]
 			}
 		}
 	}
@@ -1637,11 +2188,15 @@ void GLWall::Process(seg_t *seg, sector_t * frontsector, sector_t * backsector)
 			fixed_t bch1a = bch1, bch2a = bch2;
 			if (frontsector->GetTexture(sector_t::floor) != skyflatnum || backsector->GetTexture(sector_t::floor) != skyflatnum)
 			{
-				// the back sector's floor obstructs part of this wall				
-				if (ffh1 > bch1 && ffh2 > bch2)
+				// the back sector's floor obstructs part of this wall
+				if(!((seg->linedef->backsector->Flags) & SECF_SKY_HACK_CONSOLE) || 
+					!((seg->linedef->frontsector->Flags) & SECF_SKY_HACK_CONSOLE))//[GEC]
 				{
-					bch2a = ffh2;
-					bch1a = ffh1;
+					if (ffh1 > bch1 && ffh2 > bch2)
+					{
+						bch2a = ffh2;
+						bch1a = ffh1;
+					}
 				}
 			}
 
@@ -1650,9 +2205,18 @@ void GLWall::Process(seg_t *seg, sector_t * frontsector, sector_t * backsector)
 				gltexture = FMaterial::ValidateTexture(seg->sidedef->GetTexture(side_t::top), true);
 				if (gltexture)
 				{
+					// [GEC]
+					R_SetSegLineColor(seg, 1, (realfront->GetPlaneTexZ(sector_t::ceiling)),
+						(realfront->GetPlaneTexZ(sector_t::floor)),
+						(ffh1), (ffh2), (fch1), (fch2),
+						(bfh1), (bfh2), (bch1), (bch2));
+
 					DoTexture(RENDERWALL_TOP, seg, (seg->linedef->flags & (ML_DONTPEGTOP)) == 0,
 						realfront->GetPlaneTexZ(sector_t::ceiling), realback->GetPlaneTexZ(sector_t::ceiling),
 						fch1, fch2, bch1a, bch2a, 0);
+
+					//[GEC] Reset Colors
+					SetWallColors(seg); //[GEC]
 				}
 				else if (!(seg->sidedef->Flags & WALLF_POLYOBJ))
 				{
@@ -1697,8 +2261,24 @@ void GLWall::Process(seg_t *seg, sector_t * frontsector, sector_t * backsector)
 
 		if (gltexture || drawfogboundary)
 		{
+			//[GEC]
+			if (seg->linedef->backsector)
+			{
+				// [GEC]
+				R_SetSegLineColor(seg, 3, (realfront->GetPlaneTexZ(sector_t::ceiling)),
+					(realfront->GetPlaneTexZ(sector_t::floor)),
+					(ffh1), (ffh2), (fch1), (fch2),
+					(bfh1), (bfh2), (bch1), (bch2));
+			}
+
+			if(!(seg->linedef->gecflags & ML_NO_RENDERMIDTEX))
+			{
 			DoMidTexture(seg, drawfogboundary, frontsector, backsector, realfront, realback,
 				fch1, fch2, ffh1, ffh2, bch1, bch2, bfh1, bfh2);
+			}
+
+			//[GEC] Reset Colors
+			SetWallColors(seg); //[GEC]
 		}
 
 		if (backsector->e->XFloor.ffloors.Size() || frontsector->e->XFloor.ffloors.Size())
@@ -1708,10 +2288,14 @@ void GLWall::Process(seg_t *seg, sector_t * frontsector, sector_t * backsector)
 
 		/* bottom texture */
 		// the back sector's ceiling obstructs part of this wall (specially important for sky sectors)
-		if (fch1<bfh1 && fch2<bfh2)
+		if(!((seg->linedef->backsector->Flags) & SECF_SKY_HACK_CONSOLE) || 
+			!((seg->linedef->frontsector->Flags) & SECF_SKY_HACK_CONSOLE))//[GEC]
 		{
-			bfh1 = fch1;
-			bfh2 = fch2;
+			if (fch1<bfh1 && fch2<bfh2)
+			{
+				bfh1 = fch1;
+				bfh2 = fch2;
+			}
 		}
 
 		if (bfh1>ffh1 || bfh2>ffh2)
@@ -1719,12 +2303,21 @@ void GLWall::Process(seg_t *seg, sector_t * frontsector, sector_t * backsector)
 			gltexture = FMaterial::ValidateTexture(seg->sidedef->GetTexture(side_t::bottom), true);
 			if (gltexture)
 			{
+				// [GEC]
+				R_SetSegLineColor(seg, 2, (realfront->GetPlaneTexZ(sector_t::ceiling)),
+					(realfront->GetPlaneTexZ(sector_t::floor)),
+					(ffh1), (ffh2), (fch1), (fch2),
+					(bfh1), (bfh2), (bch1), (bch2));
+
 				DoTexture(RENDERWALL_BOTTOM, seg, (seg->linedef->flags & ML_DONTPEGBOTTOM) > 0,
 					realback->GetPlaneTexZ(sector_t::floor), realfront->GetPlaneTexZ(sector_t::floor),
 					bfh1, bfh2, ffh1, ffh2,
 					frontsector->GetTexture(sector_t::ceiling) == skyflatnum && backsector->GetTexture(sector_t::ceiling) == skyflatnum ?
 					realfront->GetPlaneTexZ(sector_t::floor) - realback->GetPlaneTexZ(sector_t::ceiling) :
 					realfront->GetPlaneTexZ(sector_t::floor) - realfront->GetPlaneTexZ(sector_t::ceiling));
+
+				//[GEC] Reset Colors
+				SetWallColors(seg); //[GEC]
 			}
 			else if (!(seg->sidedef->Flags & WALLF_POLYOBJ))
 			{
@@ -1755,6 +2348,8 @@ void GLWall::Process(seg_t *seg, sector_t * frontsector, sector_t * backsector)
 			}
 		}
 	}
+
+	R_GenerateSwitchPlane(seg);//[GEC]
 }
 
 //==========================================================================

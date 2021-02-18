@@ -133,6 +133,7 @@ static void P_Add3DFloor(sector_t* sec, sector_t* sec2, line_t* master, int flag
 		ffloor->bottom.texture = &sec2->planes[sector_t::floor].Texture;
 		ffloor->bottom.texheight = &sec2->planes[sector_t::floor].TexZ;
 		ffloor->bottom.isceiling = sector_t::floor;
+		ffloor->bottom.flatcolor = &sec2->SpecialColors[sector_t::floor];//[GEC]
 	}
 	else 
 	{
@@ -140,6 +141,7 @@ static void P_Add3DFloor(sector_t* sec, sector_t* sec2, line_t* master, int flag
 		ffloor->bottom.texture = &sec2->planes[sector_t::ceiling].Texture;
 		ffloor->bottom.texheight = &sec2->planes[sector_t::ceiling].TexZ;
 		ffloor->bottom.isceiling = sector_t::ceiling;
+		ffloor->bottom.flatcolor = &sec2->SpecialColors[sector_t::ceiling];//[GEC]
 	}
 	
 	if (!(flags&FF_FIX))
@@ -149,6 +151,7 @@ static void P_Add3DFloor(sector_t* sec, sector_t* sec2, line_t* master, int flag
 		ffloor->top.texheight = &sec2->planes[sector_t::ceiling].TexZ;
 		ffloor->toplightlevel = &sec2->lightlevel;
 		ffloor->top.isceiling = sector_t::ceiling;
+		ffloor->top.flatcolor = &sec2->SpecialColors[sector_t::ceiling];//[GEC]
 	}
 	else	// FF_FIX is a special case to patch rendering holes
 	{
@@ -158,6 +161,7 @@ static void P_Add3DFloor(sector_t* sec, sector_t* sec2, line_t* master, int flag
 		ffloor->toplightlevel = &sec->lightlevel;
 		ffloor->top.isceiling = sector_t::floor;
 		ffloor->top.model = sec;
+		ffloor->top.flatcolor = &sec2->SpecialColors[sector_t::floor];//[GEC]
 	}
 
 	// Hacks for Vavoom's idiotic implementation
@@ -593,7 +597,11 @@ void P_Recalculate3DFloors(sector_t * sector)
 		lightlist[0].extra_colormap = sector->ColorMap;
 		lightlist[0].blend = 0;
 		lightlist[0].flags = 0;
+		lightlist[0].fromsector = true;
 		
+
+		resetlight = lightlist[0];
+
 		maxheight = sector->CenterCeiling();
 		minheight = sector->CenterFloor();
 		for(i = 0; i < ffloors.Size(); i++)

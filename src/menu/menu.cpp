@@ -56,6 +56,15 @@
 #include "menu/menu.h"
 #include "textures/textures.h"
 
+//[GEC] Stuff
+#include "d_main.h"
+//{
+#include "pagedefs.h"
+extern int SkipPage;
+extern bool ForceSkipPage;
+extern bool NoMenu;
+//}
+
 //
 // Todo: Move these elsewhere
 //
@@ -81,6 +90,21 @@ int				BackbuttonTime;
 fixed_t			BackbuttonAlpha;
 static bool		MenuEnabled = true;
 
+//[GEC] Stuff
+//{
+fixed_t	MenuAlpha = FRACUNIT;
+bool	MenuReset = true;//[GEC]
+DMenu	*Get_Menu = NULL;
+int		MenuFadeTime = 0;
+bool	FadeOutCloseMenu = false;
+bool	MenuKeyWait = false;
+bool	GameMenuEnabled = false;
+bool	MenuFade = false;
+void	M_MenuFadeIn(void);
+void	M_MenuFadeOut(void);
+void	(*menufadefunc)(void) = NULL;
+bool	DisableDim = false;//[GEC]
+//}
 
 #define KEY_REPEAT_DELAY	(TICRATE*5/12)
 #define KEY_REPEAT_RATE		(3)
@@ -102,7 +126,66 @@ DMenu::DMenu(DMenu *parent)
 	mBackbuttonSelected = false;
 	GC::WriteBarrier(this, parent);
 }
-	
+
+//
+// M_MenuFadeIn [GEC] D64EX
+//
+
+void M_MenuFadeIn(void)
+{
+	if (DMenu::CurrentMenu == NULL)
+	{
+		MenuAlpha = FRACUNIT;
+		MenuKeyWait = false;
+		menufadefunc = NULL;
+	}
+	else
+	{
+		fixed_t fadetime = FLOAT2FIXED((MenuFadeTime + 20)/255.f);
+
+		if((MenuAlpha + fadetime) < FRACUNIT)
+		{
+			MenuAlpha += fadetime;
+		}
+		else
+		{
+			MenuKeyWait = false;
+			MenuAlpha = FRACUNIT;
+			menufadefunc = NULL;
+			GC::WriteBarrier(DMenu::CurrentMenu);
+		}
+	}
+}
+
+//
+// M_MenuFadeOut [GEC] D64EX
+//
+
+void M_MenuFadeOut(void)
+{
+    fixed_t fadetime = FLOAT2FIXED((MenuFadeTime + 20)/255.f);
+
+    if(MenuAlpha > fadetime)
+	{
+        MenuAlpha -= fadetime;
+    }
+    else
+	{
+		if(FadeOutCloseMenu)
+		{
+			DMenu::CurrentMenu->Close(true);
+		}
+		else
+		{
+			if (DMenu::CurrentMenu != NULL) DMenu::CurrentMenu->ReleaseCapture();
+			DMenu::CurrentMenu = Get_Menu;
+		}
+
+		MenuAlpha = 0;
+        menufadefunc = M_MenuFadeIn;
+    }
+}
+
 bool DMenu::Responder (event_t *ev) 
 { 
 	bool res = false;
@@ -122,7 +205,7 @@ bool DMenu::Responder (event_t *ev)
 		}
 		else if (ev->subtype == EV_GUI_MouseMove)
 		{
-			BackbuttonTime = BACKBUTTON_TIME;
+			BackbuttonTime = BACKBUTTON_TIME * TICRATE;//[GEC]
 			if (mMouseCapture || m_use_mouse == 1)
 			{
 				res = MouseEventBack(MOUSE_Move, ev->data1, ev->data2);
@@ -171,8 +254,20 @@ bool DMenu::MenuEvent (int mkey, bool fromcontroller)
 //
 //=============================================================================
 
-void DMenu::Close ()
+void DMenu::Close (bool noalpha)
 {
+	if(mParentMenu == NULL)//[GEC]
+		noalpha = true;
+
+	if(MenuAlpha == FRACUNIT && !noalpha && MenuFade)//[GEC]
+	{
+		MenuKeyWait = true;
+		MenuAlpha = FRACUNIT;
+		FadeOutCloseMenu = true;
+		menufadefunc = M_MenuFadeOut;
+		return;
+	}
+	
 	assert(DMenu::CurrentMenu == this);
 	DMenu::CurrentMenu = mParentMenu;
 	Destroy();
@@ -281,6 +376,26 @@ void DMenu::Drawer ()
 
 bool DMenu::DimAllowed()
 {
+	if(gamestate != GS_LEVEL)//[GEC]
+	{
+		if(DisableDim) {return false;}//[GEC]
+	}
+
+	return true;
+}
+
+bool DMenu::BackImage()//[GEC]
+{
+	if (gameinfo.mBackImage)//[GEC]
+	{
+		FTexture *tex = TexMan(gameinfo.mBackImage);
+		screen->DrawTexture (tex, 0, 0, 
+			DTA_Bottom320x200, false,// activate virtBottom
+			DTA_VirtualWidthF, (double)gameinfo.mBackResW,
+			DTA_VirtualHeightF, (double)gameinfo.mBackResH,
+			DTA_Alpha, MenuAlpha,
+			TAG_DONE);//[GEC]
+	}
 	return true;
 }
 
@@ -297,6 +412,15 @@ bool DMenu::TranslateKeyboardEvents()
 
 void M_StartControlPanel (bool makeSound)
 {
+	if (MenuKeyWait)//[GEC]
+		return;
+
+	if (gameaction == ga_nothing && (demoplayback || gamestate == GS_DEMOSCREEN || gamestate == GS_TITLELEVEL))//[GEC]
+	{
+		if((NoMenu == true) || (SkipPage != -1))//[GEC]
+			return;
+	}
+
 	// intro might call this repeatedly
 	if (DMenu::CurrentMenu != NULL)
 		return;
@@ -327,9 +451,32 @@ void M_StartControlPanel (bool makeSound)
 //
 //=============================================================================
 
-void M_ActivateMenu(DMenu *menu)
+void M_ActivateMenu(DMenu *menu, bool noalpha)
 {
 	if (menuactive == MENU_Off) menuactive = MENU_On;
+
+	if((DMenu::CurrentMenu == NULL))//[GEC]
+		noalpha = true;
+
+	/*if(MenuAlpha == FRACUNIT && !noalpha && (DMenu::CurrentMenu == NULL) && MenuFade)//[GEC]
+	{
+		if (DMenu::CurrentMenu != NULL) DMenu::CurrentMenu->ReleaseCapture();
+		DMenu::CurrentMenu = menu;
+		MenuKeyWait = true;
+		MenuAlpha = 0;
+		menufadefunc = M_MenuFadeIn;
+		return;
+	}
+	else */if(MenuAlpha == FRACUNIT && !noalpha && MenuFade)//[GEC]
+	{
+		MenuKeyWait = true;
+		Get_Menu = menu;
+		MenuAlpha = FRACUNIT;
+		FadeOutCloseMenu = false;
+		menufadefunc = M_MenuFadeOut;
+		return;
+	}
+
 	if (DMenu::CurrentMenu != NULL) DMenu::CurrentMenu->ReleaseCapture();
 	DMenu::CurrentMenu = menu;
 	GC::WriteBarrier(DMenu::CurrentMenu);
@@ -343,6 +490,26 @@ void M_ActivateMenu(DMenu *menu)
 
 void M_SetMenu(FName menu, int param)
 {
+	if (MenuKeyWait)//[GEC]
+		return;
+
+	if (gameaction == ga_nothing && (demoplayback || gamestate == GS_DEMOSCREEN || gamestate == GS_TITLELEVEL))//[GEC]
+	{
+		if(NoMenu == true)//[GEC]
+			return;
+
+		if(SkipPage != -1)//[GEC]
+		{
+			gameaction = ga_nothing;
+			gamestate = GS_DEMOSCREEN;
+			if(gamestate != GS_TITLELEVEL)
+				G_CheckDemoStatus ();
+			ForceSkipPage = true;
+			V_SetBorderNeedRefresh();
+			return;
+		}
+	}
+	
 	// some menus need some special treatment
 	switch (menu)
 	{
@@ -392,7 +559,10 @@ void M_SetMenu(FName menu, int param)
 			gamestate = GS_HIDECONSOLE;
 			gameaction = ga_newgame;
 		}
-		M_ClearMenus ();
+
+		if(gameinfo.mStartWipe == GS_DEMOSCREEN)//[GEC]
+			M_ClearMenus ();
+
 		return;
 
 	case NAME_Savegamemenu:
@@ -402,6 +572,25 @@ void M_SetMenu(FName menu, int param)
 			M_StartMessage (GStrings("SAVEDEAD"), 1);
 			return;
 		}
+		break;
+
+	case NAME_StartTitle://[GEC]
+		//if (!usergame/* || (players[consoleplayer].health <= 0 && !multiplayer) || gamestate != GS_LEVEL*/)
+		if (!usergame)
+		{
+			return;
+		}
+		else
+		{
+			//S_Sound (CHAN_VOICE | CHAN_UI, "menu/activate", snd_menuvolume, ATTN_NONE);
+			M_ClearMenus ();
+			if (!netgame)
+			{
+				D_StartTitle (true);//[GEC]
+			}
+			return;
+		}
+		break;
 	}
 
 	// End of special checks
@@ -473,7 +662,7 @@ bool M_Responder (event_t *ev)
 	int mkey = NUM_MKEYS;
 	bool fromcontroller = true;
 
-	if (chatmodeon)
+	if (chatmodeon || MenuKeyWait)//[GEC]
 	{
 		return false;
 	}
@@ -630,8 +819,25 @@ bool M_Responder (event_t *ev)
 			// Pop-up menu?
 			if (ev->data1 == KEY_ESCAPE)
 			{
+				//if(NoMenu == true)//[GEC]
+					//return false;
+
+				/*if(SkipPage != -1)//[GEC]
+				{
+					gamestate = GS_DEMOSCREEN;
+					ForceSkipPage = true;
+					return false;
+				}*/
+
 				M_StartControlPanel(true);
-				M_SetMenu(NAME_Mainmenu, -1);
+				if(GameMenuEnabled && (gamestate == GS_LEVEL))//[GEC]
+				{
+					M_SetMenu(NAME_Gamemenu, -1);
+				}
+				else
+				{
+					M_SetMenu(NAME_Mainmenu, -1);
+				}
 				return true;
 			}
 			// If devparm is set, pressing F1 always takes a screenshot no matter
@@ -662,6 +868,11 @@ bool M_Responder (event_t *ev)
 
 void M_Ticker (void) 
 {
+	if(menufadefunc && MenuFade)
+	{
+		menufadefunc();
+	}
+
 	DMenu::MenuTime++;
 	if (DMenu::CurrentMenu != NULL && menuactive != MENU_Off) 
 	{
@@ -716,6 +927,7 @@ void M_Drawer (void)
 	if (DMenu::CurrentMenu != NULL && menuactive != MENU_Off) 
 	{
 		if (DMenu::CurrentMenu->DimAllowed()) screen->Dim(fade);
+		DMenu::CurrentMenu->BackImage();
 		DMenu::CurrentMenu->Drawer();
 	}
 }
@@ -728,6 +940,15 @@ void M_Drawer (void)
 
 void M_ClearMenus ()
 {
+	//[GEC] Stuff
+	//{
+	menufadefunc = NULL;
+	MenuAlpha = FRACUNIT;
+	MenuReset = true;
+	Get_Menu = NULL;
+	MenuKeyWait = false;
+	//}
+
 	M_DemoNoPlay = false;
 	if (DMenu::CurrentMenu != NULL)
 	{
@@ -746,6 +967,11 @@ void M_ClearMenus ()
 
 void M_Init (void) 
 {
+	//[GEC] Stuff
+	//{
+	menufadefunc = NULL;
+	MenuKeyWait = false;
+	//}
 	M_ParseMenuDefs();
 	M_CreateMenus();
 }

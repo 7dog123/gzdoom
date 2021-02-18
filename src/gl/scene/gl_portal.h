@@ -48,6 +48,7 @@ struct GLHorizonInfo
 {
 	GLSectorPlane plane;
 	int lightlevel;
+	int lightlevel64;//[GEC]
 	FColormap colormap;
 };
 

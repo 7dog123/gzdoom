@@ -1288,6 +1288,33 @@ FMultiPatchTexture::FMultiPatchTexture (FScanner &sc, int usetype)
 				sc.MustGetNumber();
 				TopOffset = sc.Number;
 			}
+
+			//[GEC] Start
+			else if (sc.Compare("NoPuffMiddle"))
+			{
+				bNoPuffMiddle = true;
+			}
+			else if (sc.Compare("NoPuffTop"))
+			{
+				bNoPuffTop = true;
+			}
+			else if (sc.Compare("NoPuffBottom"))
+			{
+				bNoPuffBottom = true;
+			}
+			else if (sc.Compare("NoProjectileMiddle"))
+			{
+				bNoProjectileMiddle = true;
+			}
+			else if (sc.Compare("NoProjectileTop"))
+			{
+				bNoProjectileTop = true;
+			}
+			else if (sc.Compare("NoProjectileBottom"))
+			{
+				bNoProjectileBottom = true;
+			}
+			//[GEC] End
 			else
 			{
 				sc.ScriptError("Unknown texture property '%s'", sc.String);

@@ -138,6 +138,7 @@ enum
 	IF_ALWAYSRESPAWN	= 1<<23,	// Always respawn, regardless of dmflag
 	IF_TRANSFER			= 1<<24,	// All inventory items that the inventory item contains is also transfered to the pickuper
 	IF_NOTELEPORTFREEZE	= 1<<25,	// does not 'freeze' the player right after teleporting.
+	IF_CLASSICFLASH		= 1<<26,	// [GEC] Set original aumento de flash pickup
 };
 
 
@@ -278,6 +279,10 @@ public:
 	fixed_t BobSpeed;						// [XA] Bobbing speed. Defines how quickly a weapon bobs.
 	fixed_t BobRangeX, BobRangeY;			// [XA] Bobbing range. Defines how far a weapon bobs in either direction.
 
+	fixed_t  W_RESH, W_RESW;				// [Gec] Escala en X & Y.
+	int FlashRenderStyle;					// [Gec]
+	fixed_t Flash_Alpha;					// [Gec]
+
 	// In-inventory instance variables
 	TObjPtr<AAmmo> Ammo1, Ammo2;
 	TObjPtr<AWeapon> SisterWeapon;
@@ -362,6 +367,12 @@ enum
 	WIF_BOT_REACTION_SKILL_THING = 1<<31, // I don't understand this
 	WIF_BOT_EXPLOSIVE =		1<<30,		// weapon fires an explosive
 	WIF_BOT_BFG =			1<<28,		// this is a BFG
+
+	WIF_GEC_CONSOLEBOBBING		=	0x00020000, // [GEC] Console Bobbing Style
+	WIF_GEC_STOPBOBBING			=	0x00040000, // [GEC] Stop Bobbing The Weapon
+	WIF_GEC_NORAMPAGE			=	0x00080000, // [GEC] No Rampage In Weapon
+	WIF_GEC_BRIGHTWITHCOLOR		=	0x00100000, // [GEC] Set Color in Bright State
+	WIF_GEC_FORCEOLDBOBBING		=	0x00200000, // [GEC] Force Old System Bobbing
 };
 
 class AWeaponGiver : public AWeapon

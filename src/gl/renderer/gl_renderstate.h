@@ -131,6 +131,14 @@ class FRenderState
 
 	bool ApplyShader();
 
+	float mFragColor[4];//[GEC]
+	int	mSetLightMode;//[GEC]
+	float mPsxBrightLevel;//[GEC]
+	float mLight64;//[GEC]
+	PalEntry mBlendColor;//[GEC]
+	int	mBlendMode;//[GEC]
+	int	mWrapS, mWrapT;//[GEC] Only shader Brightmaps
+
 public:
 	FRenderState()
 	{
@@ -142,6 +150,45 @@ public:
 	int SetupShader(bool cameratexture, int &shaderindex, int &cm, float warptime);
 	void Apply(bool forcenoshader = false);
 	void ApplyColorMask();
+
+	void ResetSpecials()//[GEC]
+	{
+		mLight64 = 0.0;
+		mSetLightMode = 0;
+		mPsxBrightLevel = 1.0;
+
+		mBlendColor = PalEntry(0,0,0,0);
+		mBlendMode = 0;
+		mWrapS = 0;
+		mWrapT = 0;
+	}
+
+	void SetLightMode(int mode)//[GEC]
+	{
+		mSetLightMode = mode;
+	}
+
+	void SetPsxBrightLevel(int Level)//[GEC]
+	{
+		mPsxBrightLevel = ((float)(255 + Level) / 255.0f);
+	}
+
+	void SetLight64(int Level)//[GEC]
+	{
+		mLight64 = ((float)(Level) / 255.0f);
+	}
+
+	void SetBlendColor(PalEntry BlendColor, int mode)//[GEC]
+	{
+		mBlendColor = BlendColor;
+		mBlendMode = mode;
+	}
+
+	void SetWarpTexture(int WrapS, int WrapT)//[GEC]
+	{
+		mWrapS = WrapS;
+		mWrapT = WrapT;
+	}
 
 	void GetColorMask(bool& r, bool &g, bool& b, bool& a) const
 	{
@@ -222,6 +269,34 @@ public:
 		mDynLight[0] = r;
 		mDynLight[1] = g;
 		mDynLight[2] = b;
+	}
+
+	void GetDynLight(float * r, float * g, float * b)//[GEC]
+	{
+		*r = mDynLight[0];
+		*g = mDynLight[1];
+		*b = mDynLight[2];
+	}
+
+	void SetFragColor(float r, float g, float b, float a)//[GEC]
+	{
+		mFragColor[0] = r;
+		mFragColor[1] = g;
+		mFragColor[2] = b;
+		mFragColor[3] = a;
+	}
+
+	void GetFragColor(float * r, float * g, float * b,  float * a)//[GEC]
+	{
+		*r = mFragColor[0];
+		*g = mFragColor[1];
+		*b = mFragColor[2];
+		*a = mFragColor[3];
+	}
+
+	void GetTextureMode(int *mode)//[GEC]
+	{
+		*mode = mTextureMode;
 	}
 
 	void SetFog(PalEntry c, float d)

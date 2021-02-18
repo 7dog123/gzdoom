@@ -627,6 +627,9 @@ OptionValue Wipes
 	1.0, "Melt"
 	2.0, "Burn"
 	3.0, "Crossfade"
+	4.0, "Melt64"		//[GEC]
+	5.0, "FadeScreen"	//[GEC]
+	6.0, "LoadingScreen"	//[GEC]
 }
 
 OptionValue Endoom 
@@ -1116,6 +1119,13 @@ OptionValue MessageLevels
 	2.0, "Critical Messages"
 }
 
+OptionValue MessageTypes//[GEC]
+{
+	0, "ZDoom"
+	1, "DOOM PSX"
+	2, "DOOM 64"
+}
+
 OptionMenu MessageOptions
 {
 	Title 	"MESSAGES"
@@ -1125,6 +1135,8 @@ OptionMenu MessageOptions
 	Option "Scale text in high res", 	"con_scaletext", "ScaleValues"
 	Option "Minimum message level", 	"msg", "MessageLevels"
 	Option "Center messages",			"con_centernotify", "OnOff"
+	Option "Center messages Like Log",		"con_midlikelog", "OnOff"//[GEC]
+	Option "Message Style", 	"con_messagetype", "MessageTypes"//[GEC]
 	StaticText " "
 	StaticText "Message Colors", 1
 	StaticText " "
@@ -1531,6 +1543,8 @@ OptionMenu SoundOptions
 	Option "Underwater reverb",	"snd_waterreverb", "OnOff"
 	Option "Randomize pitches",	"snd_pitched", "OnOff"
 	Slider "Sound channels",	"snd_channels", 8, 256, 8, 0
+	Option "Disable sound limit",	"snd_limit", "OnOff"//[GEC]
+
 	StaticText " "
 
 	ifoption(fmodex)

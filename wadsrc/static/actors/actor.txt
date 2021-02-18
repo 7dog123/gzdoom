@@ -357,6 +357,14 @@ ACTOR Actor native //: Thinker
 	action native ACS_NamedExecuteWithResult(string script, int arg1=0, int arg2=0, int arg3=0, int arg4=0);
 	action native ACS_NamedExecuteAlways(string script, int mapnum=0, int arg1=0, int arg2=0, int arg3=0);
 
+	//[GEC]
+	action native A_FireLaser(class<Actor> laser, class<Actor> pufftype, sound whattoplay, float spawnheight = 40, float angle = 0, float range = 0);
+	action native A_ActorExplode(class<Actor> itemtype, int delaydraw = 0, int drawcount = 0);
+	action native A_CustomTracer(class<Actor> smoketype = "RevenantTracerSmoke", class<Actor> pufftype = "BulletPuff", float zvel = 0.125, float angle = 16.875, int startdelay = 0, int seekerlimit = 0, int randomseekmask = 3);
+	action native A_TargetCamera();
+	action native A_BFGFlash(color color1 = "", int ticdown = 0);
+
+
 	States
 	{
 	Spawn:

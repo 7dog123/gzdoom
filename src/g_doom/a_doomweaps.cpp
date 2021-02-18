@@ -704,3 +704,48 @@ DEFINE_ACTION_FUNCTION(AActor, A_FireOldBFG)
     }
 	if (doesautoaim && weapon != NULL) weapon->WeaponFlags &= ~WIF_NOAUTOAIM; // Restore autoaim setting
 }
+
+//
+// A_FireLaser D64 [GEC] Es un costumisable laser
+//
+
+DEFINE_ACTION_FUNCTION_PARAMS(AActor, A_FireLaser)
+{
+	ACTION_PARAM_START(6);
+	ACTION_PARAM_CLASS(laser, 0);
+	ACTION_PARAM_CLASS(pufftype, 1);
+	ACTION_PARAM_SOUND(soundid, 2);
+	ACTION_PARAM_FIXED(spawnheight, 3);
+	ACTION_PARAM_ANGLE(angle, 4);
+	ACTION_PARAM_FIXED(range, 5);
+
+	if (!self->player)
+	{
+		ACTION_SET_RESULT(false);
+		return;
+	}
+
+	if (!laser)
+	{
+		ACTION_SET_RESULT(false);
+		return;
+	}
+
+	player_t *player = self->player;
+	AWeapon *weapon = player->ReadyWeapon;
+
+	// only use ammo when actually hitting something!
+	if (weapon != NULL && ACTION_CALL_FROM_WEAPON())
+	{
+		weapon->DepleteAmmo(weapon->bAltFire, true, 1);
+	}
+
+	P_SetPsprite(player, ps_flash, weapon->FindState(NAME_Flash));
+
+	new T_LaserThinker (self, laser, pufftype, spawnheight, angle, range);
+
+	if (soundid)
+		S_Sound(self, CHAN_AUTO, soundid, 1, ATTN_NORM);
+
+	return;
+}

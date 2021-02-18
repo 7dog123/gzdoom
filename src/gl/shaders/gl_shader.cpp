@@ -65,7 +65,6 @@ CVAR(Bool, gl_colormap_shader, false, CVAR_ARCHIVE|CVAR_GLOBALCONFIG|CVAR_NOINIT
 CVAR(Bool, gl_brightmap_shader, false, CVAR_ARCHIVE|CVAR_GLOBALCONFIG|CVAR_NOINITCALL)
 CVAR(Bool, gl_glow_shader, true, CVAR_ARCHIVE|CVAR_GLOBALCONFIG|CVAR_NOINITCALL)
 
-
 extern long gl_frameMS;
 
 //==========================================================================
@@ -144,6 +143,9 @@ bool FShader::Load(const char * name, const char * vert_prog_lump, const char * 
 		glBindAttribLocation(hShader, VATTR_FOGPARAMS, "fogparams");
 		glBindAttribLocation(hShader, VATTR_LIGHTLEVEL, "lightlevel_in"); // Korshun.
 
+		//glBindAttribLocation(hShader, VATTR_LIGHTLEVEL64, "lightlevel_64_in"); // [GEC] lightlevel_64
+		//glBindAttribLocation(hShader, VATTR_BLENDCOLOR, "blendcolor_in"); // [GEC] blend color
+
 		glLinkProgram(hShader);
 
 		glGetShaderInfoLog(hVertProg, 10000, NULL, buffer);
@@ -169,6 +171,20 @@ bool FShader::Load(const char * name, const char * vert_prog_lump, const char * 
 			// only print message if there's an error.
 			Printf("Init Shader '%s':\n%s\n", name, error.GetChars());
 		}
+
+		muPalLightLevels.Init(hShader, "uPalLightLevels");//[GEC] Shader
+		muSoftLightPsx.Init(hShader, "uSoftLightPsx");//[GEC] Shader
+		muSetLightMode.Init(hShader, "uSetLightMode");//[GEC] Shader
+		muPsxBrightLevel.Init(hShader, "uPsxBrightLevel");//[GEC] Shader
+		muLight64.Init(hShader, "uLight64");//[GEC] Shader
+		muBlendColor.Init(hShader, "uBlendColor");
+		muBlendMode.Init(hShader, "uBlendMode");//[GEC] Shader
+		muFadeLinear.Init(hShader, "uFadeLinear");//[GEC] Shader
+		muFadeLinear.Init(hShader, "uFadeLinear");//[GEC] Shader
+		muPsxColor.Init(hShader, "uPsxColor");//[GEC] Shader
+		muWrapS.Init(hShader, "uWrapS");//[GEC] Shader
+		muWrapT.Init(hShader, "uWrapT");//[GEC] Shader
+
 		timer_index = glGetUniformLocation(hShader, "timer");
 		desaturation_index = glGetUniformLocation(hShader, "desaturation_factor");
 		fogenabled_index = glGetUniformLocation(hShader, "fogenabled");
@@ -322,8 +338,11 @@ FShaderContainer::FShaderContainer(const char *ShaderName, const char *ShaderPat
 				{
 					if (gl.maxuniforms < 1024 || gl.shadermodel != 4)
 					{
-						shader[i] = NULL;
-						continue;
+						if(gl.shadermodel != 3)//[GEC]
+						{
+							shader[i] = NULL;
+							continue;
+						}
 					}
 					// this can't be in the shader code due to ATI strangeness.
 					str = "#version 120\n#extension GL_EXT_gpu_shader4 : enable\n";
@@ -333,8 +352,11 @@ FShaderContainer::FShaderContainer(const char *ShaderName, const char *ShaderPat
 				{
 					if (gl.shadermodel != 4)
 					{
-						shader[i] = NULL;
-						continue;
+						if(gl.shadermodel != 3)//[GEC]
+						{
+							shader[i] = NULL;
+							continue;
+						}
 					}
 				}
 				str += shaderdefines[i];
@@ -411,7 +433,12 @@ FShader *FShaderContainer::Bind(int cm, bool glowing, float Speed, bool lights)
 	else
 	{
 		bool desat = cm>=CM_DESAT1 && cm<=CM_DESAT31;
-		sh = shader[glowing + 2*desat + 4*lights + (glset.lightmode & 8)];
+		//sh = shader[glowing + 2*desat + 4*lights + (glset.lightmode & 8)];
+		//[GEC]
+		int lightmode = (glset.lightmode & 8);
+		if(glset.lightmode & 16) lightmode = 8;
+
+		sh = shader[glowing + 2*desat + 4*lights + lightmode];//[GEC]
 		// [BB] If there was a problem when loading the shader, sh is NULL here.
 		if( sh )
 		{
@@ -453,6 +480,7 @@ static const FDefaultShader defaultshaders[]=
 	{"Jagged Fuzz", "shaders/glsl/fuzz_jagged.fp"},
 	{"Noise Fuzz", "shaders/glsl/fuzz_noise.fp"},
 	{"Smooth Noise Fuzz", "shaders/glsl/fuzz_smoothnoise.fp"},
+	//{"Default",	"shaders/glsl/func_normal.fp"},//[GEC]
 	{NULL,NULL}
 };
 

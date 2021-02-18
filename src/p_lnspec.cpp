@@ -562,19 +562,26 @@ FUNC(LS_Ceiling_RaiseByValueTimes8)
 FUNC(LS_Ceiling_CrushAndRaise)
 // Ceiling_CrushAndRaise (tag, speed, crush, crushtype)
 {
-	return EV_DoCeiling (DCeiling::ceilCrushAndRaise, ln, arg0, SPEED(arg1), SPEED(arg1)/2, 0, arg2, 0, 0, CRUSHTYPE(arg3));
+	bool d64mode = false;
+	if(arg3 == 4){arg3 = 1; d64mode = true;}//[GEC] Doom 64 Crush Mode
+
+	return EV_DoCeiling (DCeiling::ceilCrushAndRaise, ln, arg0, SPEED(arg1), SPEED(arg1)/2, 0, arg2, 0, 0, CRUSHTYPE(arg3), d64mode);
 }
 
 FUNC(LS_Ceiling_LowerAndCrush)
 // Ceiling_LowerAndCrush (tag, speed, crush, crushtype)
 {
-	return EV_DoCeiling (DCeiling::ceilLowerAndCrush, ln, arg0, SPEED(arg1), SPEED(arg1), 0, arg2, 0, 0, CRUSHTYPE(arg3));
+	bool d64mode = false;
+	if(arg3 == 4){arg3 = 2; d64mode = true;}//[GEC] Doom 64 Crush Mode
+	return EV_DoCeiling (DCeiling::ceilLowerAndCrush, ln, arg0, SPEED(arg1), SPEED(arg1), 0, arg2, 0, 0, CRUSHTYPE(arg3), d64mode);
 }
 
 FUNC(LS_Ceiling_LowerAndCrushDist)
 // Ceiling_LowerAndCrush (tag, speed, crush, dist, crushtype)
 {
-	return EV_DoCeiling (DCeiling::ceilLowerAndCrushDist, ln, arg0, SPEED(arg1), SPEED(arg1), arg3*FRACUNIT, arg2, 0, 0, CRUSHTYPE(arg4));
+	bool d64mode = false;
+	if(arg4 == 4){arg4 = 1; d64mode = true;}//[GEC] Doom 64 Crush Mode
+	return EV_DoCeiling (DCeiling::ceilLowerAndCrushDist, ln, arg0, SPEED(arg1), SPEED(arg1), arg3*FRACUNIT, arg2, 0, 0, CRUSHTYPE(arg4), d64mode);
 }
 
 FUNC(LS_Ceiling_CrushStop)
@@ -586,7 +593,11 @@ FUNC(LS_Ceiling_CrushStop)
 FUNC(LS_Ceiling_CrushRaiseAndStay)
 // Ceiling_CrushRaiseAndStay (tag, speed, crush, crushtype)
 {
-	return EV_DoCeiling (DCeiling::ceilCrushRaiseAndStay, ln, arg0, SPEED(arg1), SPEED(arg1)/2, 0, arg2, 0, 0, CRUSHTYPE(arg3));
+	bool d64mode = false;
+	int height = 0;
+	if(arg3 == 4){arg3 = 1; height = 8;}//[GEC] Doom 64 Crush Mode
+
+	return EV_DoCeiling (DCeiling::ceilCrushRaiseAndStay, ln, arg0, SPEED(arg1), SPEED(arg1)/2, height*FRACUNIT, arg2, 0, 0, CRUSHTYPE(arg3));
 }
 
 FUNC(LS_Ceiling_MoveToValueTimes8)
@@ -624,37 +635,56 @@ FUNC(LS_Ceiling_RaiseInstant)
 FUNC(LS_Ceiling_CrushRaiseAndStayA)
 // Ceiling_CrushRaiseAndStayA (tag, dnspeed, upspeed, damage, crushtype)
 {
-	return EV_DoCeiling (DCeiling::ceilCrushRaiseAndStay, ln, arg0, SPEED(arg1), SPEED(arg2), 0, arg3, 0, 0, CRUSHTYPE(arg4));
+	bool d64mode = false;
+	int height = 0;
+	if(arg4 == 4){arg4 = 1; height = 8;}//[GEC] Doom 64 Crush Mode
+
+	return EV_DoCeiling (DCeiling::ceilCrushRaiseAndStay, ln, arg0, SPEED(arg1), SPEED(arg2), height*FRACUNIT, arg3, 0, 0, CRUSHTYPE(arg4));
 }
 
 FUNC(LS_Ceiling_CrushRaiseAndStaySilA)
 // Ceiling_CrushRaiseAndStaySilA (tag, dnspeed, upspeed, damage, crushtype)
 {
-	return EV_DoCeiling (DCeiling::ceilCrushRaiseAndStay, ln, arg0, SPEED(arg1), SPEED(arg2), 0, arg3, 1, 0, CRUSHTYPE(arg4));
+	bool d64mode = false;
+	int height = 0;
+	if(arg4 == 4){arg4 = 1; height = 8;}//[GEC] Doom 64 Crush Mode
+
+	return EV_DoCeiling (DCeiling::ceilCrushRaiseAndStay, ln, arg0, SPEED(arg1), SPEED(arg2), height*FRACUNIT, arg3, 1, 0, CRUSHTYPE(arg4));
 }
 
 FUNC(LS_Ceiling_CrushAndRaiseA)
 // Ceiling_CrushAndRaiseA (tag, dnspeed, upspeed, damage, crushtype)
 {
-	return EV_DoCeiling (DCeiling::ceilCrushAndRaise, ln, arg0, SPEED(arg1), SPEED(arg2), 0, arg3, 0, 0, CRUSHTYPE(arg4));
+	bool d64mode = false;
+	if(arg4 == 4){arg4 = 1; d64mode = true;}//[GEC] Doom 64 Crush Mode
+	return EV_DoCeiling (DCeiling::ceilCrushAndRaise, ln, arg0, SPEED(arg1), SPEED(arg2), 0, arg3, 0, 0, CRUSHTYPE(arg4), d64mode);
 }
 
 FUNC(LS_Ceiling_CrushAndRaiseDist)
 // Ceiling_CrushAndRaiseDist (tag, dist, speed, damage, crushtype)
 {
-	return EV_DoCeiling (DCeiling::ceilCrushAndRaise, ln, arg0, SPEED(arg2), SPEED(arg2), arg1*FRACUNIT, arg3, 0, 0, CRUSHTYPE(arg4));
+	bool d64mode = false;
+	if(arg4 == 4){arg4 = 1; d64mode = true;}//[GEC] Doom 64 Crush Mode
+	return EV_DoCeiling (DCeiling::ceilCrushAndRaise, ln, arg0, SPEED(arg2), SPEED(arg2), arg1*FRACUNIT, arg3, 0, 0, CRUSHTYPE(arg4), d64mode);
 }
 
 FUNC(LS_Ceiling_CrushAndRaiseSilentA)
 // Ceiling_CrushAndRaiseSilentA (tag, dnspeed, upspeed, damage, crushtype)
 {
-	return EV_DoCeiling (DCeiling::ceilCrushAndRaise, ln, arg0, SPEED(arg1), SPEED(arg2), 0, arg3, 1, 0, CRUSHTYPE(arg4));
+	bool d64mode = false;
+	if(arg4 == 4){arg4 = 1; d64mode = true;}//[GEC] Doom 64 Crush Mode
+	return EV_DoCeiling (DCeiling::ceilCrushAndRaise, ln, arg0, SPEED(arg1), SPEED(arg2), 0, arg3, 1, 0, CRUSHTYPE(arg4), d64mode);
 }
 
 FUNC(LS_Ceiling_CrushAndRaiseSilentDist)
 // Ceiling_CrushAndRaiseSilentDist (tag, dist, upspeed, damage, crushtype)
 {
-	return EV_DoCeiling (DCeiling::ceilCrushAndRaise, ln, arg0, SPEED(arg2), SPEED(arg2), arg1*FRACUNIT, arg3, 1, 0, CRUSHTYPE(arg4));
+	//return EV_DoCeiling (DCeiling::ceilCrushAndRaise, ln, arg0, SPEED(arg2), SPEED(arg2), arg1*FRACUNIT, arg3, 1, 0, CRUSHTYPE(arg4));
+	int div = 1;
+	DCeiling::ECeiling type = DCeiling::ceilCrushAndRaise;
+	if(arg4 == 4){arg4 = 1; type = DCeiling::silentCrushAndRaise; div = 2;}//[GEC] Doom 64 Crush Mode
+
+	return EV_DoCeiling (type, ln, arg0, SPEED(arg2), SPEED(arg2)/div, arg1*FRACUNIT, arg3, 1, 0, CRUSHTYPE(arg4), false);
 }
 
 FUNC(LS_Ceiling_RaiseToNearest)
@@ -755,15 +785,15 @@ FUNC(LS_Plat_DownWaitUpStayLip)
 }
 
 FUNC(LS_Plat_DownByValue)
-// Plat_DownByValue (tag, speed, delay, height)
+// Plat_DownByValue (tag, speed, delay, height, floor-sound?)//[GEC]
 {
-	return EV_DoPlat (arg0, ln, DPlat::platDownByValue, FRACUNIT*arg3*8, SPEED(arg1), TICS(arg2), 0, 0);
+	return EV_DoPlat (arg0, ln, arg4 ? DPlat::platDownByValue2 : DPlat::platDownByValue, FRACUNIT*arg3*8, SPEED(arg1), TICS(arg2), 0, 0);//[GEC]
 }
 
 FUNC(LS_Plat_UpByValue)
-// Plat_UpByValue (tag, speed, delay, height)
+// Plat_UpByValue (tag, speed, delay, height, floor-sound?)//[GEC]
 {
-	return EV_DoPlat (arg0, ln, DPlat::platUpByValue, FRACUNIT*arg3*8, SPEED(arg1), TICS(arg2), 0, 0);
+	return EV_DoPlat (arg0, ln, arg4 ? DPlat::platUpByValue2 : DPlat::platUpByValue, FRACUNIT*arg3*8, SPEED(arg1), TICS(arg2), 0, 0);//[GEC]
 }
 
 FUNC(LS_Plat_UpWaitDownStay)
@@ -812,6 +842,7 @@ FUNC(LS_Plat_ToggleCeiling)
 	return EV_DoPlat (arg0, ln, DPlat::platToggle, 0, 0, 0, 0, 0);
 }
 
+//[GEC]
 FUNC(LS_Generic_Lift)
 // Generic_Lift (tag, speed, delay, target, height)
 {
@@ -870,7 +901,8 @@ FUNC(LS_Teleport_NewMap)
 
 		if (info && CheckIfExitIsGood (it, info))
 		{
-			G_ChangeLevel(info->MapName, arg1, arg2 ? CHANGELEVEL_KEEPFACING : 0);
+			G_TeleportNewMap (info->MapName, arg1, arg2 ? CHANGELEVEL_KEEPFACING : 0);//[GEC]
+			//G_ChangeLevel(info->MapName, arg1, arg2 ? CHANGELEVEL_KEEPFACING : 0);
 			return true;
 		}
 	}
@@ -2220,6 +2252,12 @@ static void SetScroller (int tag, DScroller::EScrollType type, fixed_t dx, fixed
 	{
 		new DScroller (type, dx, dy, -1, i, 0);
 	}
+}
+
+void CopyScroller (int tag, DScroller::EScrollType type, fixed_t dx, fixed_t dy)//[GEC]
+{
+	SetScroller (tag, type, dx, dy);
+	return;
 }
 
 // NOTE: For the next two functions, x-move and y-move are

@@ -48,6 +48,7 @@
 #include "gameconfigfile.h"
 #include "menu/menu.h"
 
+extern int MenuAlpha; //[GEC]
 
 //=============================================================================
 //
@@ -61,7 +62,7 @@ void M_DrawConText (int color, int x, int y, const char *str)
 	screen->DrawText (ConFont, color, x, y, str,
 		DTA_CellX, 8 * CleanXfac_1,
 		DTA_CellY, 8 * CleanYfac_1,
-		TAG_DONE);
+		DTA_Alpha, MenuAlpha, TAG_DONE);//[GEC]
 }
 
 
@@ -403,7 +404,7 @@ void DOptionMenu::Drawer ()
 			if (*tt == '$') tt = GStrings(tt+1);
 			screen->DrawText (BigFont, OptionSettings.mTitleColor,
 				(screen->GetWidth() - BigFont->StringWidth(tt) * CleanXfac_1) / 2, 10*CleanYfac_1,
-				tt, DTA_CleanNoMove_1, true, TAG_DONE);
+				tt, DTA_CleanNoMove_1, true, DTA_Alpha, MenuAlpha, TAG_DONE);//[GEC]
 			y = -y + BigFont->GetHeight();
 		}
 		else
@@ -523,7 +524,7 @@ void FOptionMenuItem::drawLabel(int indent, int y, EColorRange color, bool graye
 	int w = SmallFont->StringWidth(label) * CleanXfac_1;
 	if (!mCentered) x = indent - w;
 	else x = (screen->GetWidth() - w) / 2;
-	screen->DrawText (SmallFont, color, x, y, label, DTA_CleanNoMove_1, true, DTA_ColorOverlay, overlay, TAG_DONE);
+	screen->DrawText (SmallFont, color, x, y, label, DTA_CleanNoMove_1, true, DTA_ColorOverlay, overlay, DTA_Alpha, MenuAlpha, TAG_DONE);//[GEC]
 }
 
 
@@ -576,7 +577,7 @@ public:
 		mysnprintf(text, 64, "dmflags = %d   dmflags2 = %d", *dmflags, *dmflags2);
 		screen->DrawText (SmallFont, OptionSettings.mFontColorValue,
 			(screen->GetWidth() - SmallFont->StringWidth (text) * CleanXfac_1) / 2, 0, text,
-			DTA_CleanNoMove_1, true, TAG_DONE);
+			DTA_CleanNoMove_1, true, DTA_Alpha, MenuAlpha, TAG_DONE);//[GEC]
 	}
 };
 
@@ -598,7 +599,7 @@ public:
 		mysnprintf(text, 64, "compatflags = %d  compatflags2 = %d", *compatflags, *compatflags2);
 		screen->DrawText (SmallFont, OptionSettings.mFontColorValue,
 			(screen->GetWidth() - SmallFont->StringWidth (text) * CleanXfac_1) / 2, 0, text,
-			DTA_CleanNoMove_1, true, TAG_DONE);
+			DTA_CleanNoMove_1, true, DTA_Alpha, MenuAlpha, TAG_DONE);//[GEC]
 	}
 };
 

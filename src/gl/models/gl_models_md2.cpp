@@ -49,6 +49,8 @@
 #include "gl/textures/gl_material.h"
 #include "gl/shaders/gl_shader.h"
 
+#include "gl/textures/gl_combiners.h"//[GEC]
+
 static float   avertexnormals[NUMVERTEXNORMALS][3] = {
 #include "tab_anorms.h"
 };
@@ -310,6 +312,7 @@ void FDMDModel::RenderFrame(FTexture * skin, int frameno, int cm, int translatio
 	FMaterial * tex = FMaterial::ValidateTexture(skin);
 
 	tex->Bind(cm, 0, translation);
+	SetNewSpecials(tex, cm, false, false);//[GEC]
 
 	int numVerts = info.numVertices;
 
@@ -354,6 +357,7 @@ void FDMDModel::RenderFrameInterpolated(FTexture * skin, int frameno, int framen
 	FMaterial * tex = FMaterial::ValidateTexture(skin);
 
 	tex->Bind(cm, 0, translation);
+	SetNewSpecials(tex, cm, false, false);//[GEC]
 
 	int numVerts = info.numVertices;
 

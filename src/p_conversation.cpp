@@ -797,7 +797,7 @@ public:
 		{ // During demo playback, don't let the user do anything besides close this menu.
 			if (mkey == MKEY_Back)
 			{
-				Close();
+				Close(true);//[GEC]
 				return true;
 			}
 			return false;
@@ -815,7 +815,7 @@ public:
 		else if (mkey == MKEY_Back)
 		{
 			Net_WriteByte (DEM_CONVNULL);
-			Close();
+			Close(true);//[GEC]
 			return true;
 		}
 		else if (mkey == MKEY_Enter)
@@ -833,7 +833,7 @@ public:
 				Net_WriteWord(mCurNode->ThisNodeNum);
 				Net_WriteByte(mSelection);
 			}
-			Close();
+			Close(true);//[GEC]
 			return true;
 		}
 		return false;
@@ -920,7 +920,7 @@ public:
 
 		if (CurNode == NULL)
 		{
-			Close ();
+			Close (true);//[GEC]
 			return;
 		}
 

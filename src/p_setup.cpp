@@ -28,6 +28,8 @@
 #include <malloc.h>		// for alloca()
 #endif
 
+#include "gl/scene/gl_skynew.h"//[GEC]
+
 #include "templates.h"
 #include "m_argv.h"
 #include "m_swap.h"
@@ -1522,6 +1524,11 @@ void P_LoadSectors (MapData *map, FMissingTextureTracker &missingtex)
 		ss->SeqName = NAME_None;
 		ss->nextsec = -1;	//jff 2/26/98 add fields to support locking out
 		ss->prevsec = -1;	// stair retriggering until build completes
+		memset(ss->SpecialColors, 0xffffffff, sizeof(ss->SpecialColors));//[GEC] Gzdoom 2.4
+		memset(ss->SpecialColorsBase, 0xffffffff, sizeof(ss->SpecialColorsBase));//[GEC]
+		ss->lightlevel_64 = 0;//[GEC]
+		ss->EnvironmentSector = NULL;//[GEC]
+		ss->cpyspecial = 0;//[GEC]
 
 		ss->SetAlpha(sector_t::floor, FRACUNIT);
 		ss->SetAlpha(sector_t::ceiling, FRACUNIT);
@@ -4018,7 +4025,7 @@ void P_SetupLevel (const char *lumpname, int position)
 	{
 		for (i = 0; i < numbuildthings; ++i)
 		{
-			SpawnMapThing (i, &buildthings[i], 0);
+			SpawnMapThing (i, &buildthings[i], 0);//[GEC]???
 		}
 		delete[] buildthings;
 	}
@@ -4029,6 +4036,7 @@ void P_SetupLevel (const char *lumpname, int position)
 	}
 
 	// set up world state
+	R_SetupSky();//[GEC]
 	P_SpawnSpecials ();
 
 	// This must be done BEFORE the PolyObj Spawn!!!

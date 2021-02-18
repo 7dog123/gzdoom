@@ -54,9 +54,8 @@ void D_Display ();
 void D_PageTicker (void);
 void D_PageDrawer (void);
 void D_AdvanceDemo (void);
-void D_StartTitle (void);
+void D_StartTitle (bool setpage = false);//[GEC]
 bool D_AddFile (TArray<FString> &wadfiles, const char *file, bool check = true, int position = -1);
-
 
 // [RH] Set this to something to draw an icon during the next screen refresh.
 extern const char *D_DrawIcon;

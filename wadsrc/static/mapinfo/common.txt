@@ -4,6 +4,8 @@ Gameinfo
 {
 	CheatKey = "maparrows/key.txt"
 	EasyKey = "maparrows/ravenkey.txt"
+	ScaleFriction = 1.0 //[GEC]
+	PlayerAngleMode = DoomPc
 }
 
 DoomEdNums

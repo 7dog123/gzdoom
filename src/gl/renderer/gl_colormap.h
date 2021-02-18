@@ -73,6 +73,13 @@ struct FColormap
 		colormap = from->Desaturate>>3;
 		blendfactor = from->Color.a;
 	}
+
+	void LightColorMul(PalEntry Color)//[GEC]
+	{
+		LightColor.r = (LightColor.r * Color.r) / 255;
+		LightColor.g = (LightColor.g * Color.g) / 255;
+		LightColor.b = (LightColor.b * Color.b) / 255;
+	}
 };
 
 

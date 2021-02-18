@@ -229,13 +229,12 @@ include_directories( ${OPENGL_INCLUDE_DIR} )
 
 if( NOT NO_OPENAL )
     find_package( OpenAL )
-	mark_as_advanced(CLEAR OPENAL_LIBRARY OPENAL_INCLUDE_DIR)
-    if( OPENAL_FOUND )
+	mark_as_advanced(CLEAR OPENAL_INCLUDE_DIR)
+    if( OPENAL_INCLUDE_DIR )
         include_directories( ${OPENAL_INCLUDE_DIR} )
-        set( ZDOOM_LIBS ${OPENAL_LIBRARY} ${ZDOOM_LIBS} )
-    else( OPENAL_FOUND )
-        set( NO_OPENAL ON )
-    endif( OPENAL_FOUND )
+    else( OPENAL_INCLUDE_DIR )
+		set( NO_OPENAL ON )
+    endif( OPENAL_INCLUDE_DIR )
 endif( NOT NO_OPENAL )
 
 if( NOT NO_FMOD )
@@ -1033,6 +1032,7 @@ add_executable( zdoom WIN32 MACOSX_BUNDLE
 	p_user.cpp
 	p_writemap.cpp
 	p_xlat.cpp
+	pagedefs.cpp
 	parsecontext.cpp
 	po_man.cpp
 	r_swrenderer.cpp
@@ -1155,6 +1155,7 @@ add_executable( zdoom WIN32 MACOSX_BUNDLE
 	gl/textures/gl_translate.cpp
 	gl/textures/gl_hqresize.cpp
 	gl/textures/gl_skyboxtexture.cpp
+	gl/textures/gl_combiners.cpp
 	gl/scene/gl_bsp.cpp
 	gl/scene/gl_fakeflat.cpp
 	gl/scene/gl_clipper.cpp
@@ -1172,6 +1173,7 @@ add_executable( zdoom WIN32 MACOSX_BUNDLE
 	gl/scene/gl_walls_draw.cpp
 	gl/scene/gl_vertex.cpp
 	gl/scene/gl_spritelight.cpp
+	gl/scene/gl_skynew.cpp
 	gl/stereo3d/gl_stereo3d.cpp
 	gl/stereo3d/gl_stereo_cvars.cpp
 	gl/stereo3d/gl_stereo_leftright.cpp

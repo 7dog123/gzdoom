@@ -367,6 +367,11 @@ struct side_t;
 extern bool gl_plane_reflection_i;
 struct FPortal;
 
+// [d64] for the interpolated water flats
+extern fixed_t scrollfrac;//[GEC]
+extern int lightfactor;//[GEC] FadeInBrightness
+extern int infraredFactor;//[GEC] InfraredFactor
+
 // Ceiling/floor flags
 enum
 {
@@ -413,6 +418,22 @@ enum
 
 	SECF_WASSECRET		= 1 << 30,	// a secret that was discovered
 	SECF_SECRET			= 1 << 31,	// a secret sector
+
+	//[GEC]
+	SECF_USE_MULTICOLORS	= 0x001000,
+	SECF_SYNCSPECIALS		= 0x002000,
+	SECF_SCROLLFAST			= 0x004000,
+	SECF_SCROLLCEILING		= 0x008000,
+	SECF_SCROLLFLOOR		= 0x010000,
+	SECF_SCROLLLEFT			= 0x020000,
+	SECF_SCROLLRIGHT		= 0x040000,
+	SECF_SCROLLUP			= 0x080000,
+	SECF_SCROLLDOWN			= 0x100000,
+	SECF_LIQUIDFLOOR		= 0x200000,
+	SECF_SKY_HACK_CONSOLE	= 0x400000, // [GEC] SKY HACK
+	SECF_REVERB_OFF			= 0x800000,
+	//SECF_LIHGT_D64_MODE		= 0x200000,
+	//SECF_LIHGT_PSX_MODE		= 0x400000,
 
 	SECF_DAMAGEFLAGS = SECF_ENDGODMODE|SECF_ENDLEVEL|SECF_DMGTERRAINFX|SECF_HAZARD,
 	SECF_NOMODIFY = SECF_SECRET|SECF_WASSECRET,	// not modifiable by Sector_ChangeFlags
@@ -542,14 +563,17 @@ struct sector_t
 	sector_t *GetHeightSec() const;
 
 	DInterpolation *SetInterpolation(int position, bool attach);
-	void StopInterpolation(int position);
 
 	ASkyViewpoint *GetSkyBox(int which);
 
 	enum
 	{
 		floor,
-		ceiling
+		ceiling,
+		// [GEC] Usado para LightColors Array -> tomado de Gzdoom 2.4
+		walltop,
+		wallbottom,
+		sprites
 	};
 
 	struct splane
@@ -796,12 +820,16 @@ struct sector_t
 
 	// [RH] give floor and ceiling even more properties
 	FDynamicColormap *ColorMap;	// [RH] Per-sector colormap
-
+	PalEntry SpecialColorsBase[5]; //[GEC] D64 Set Colors
+	PalEntry SpecialColors[5]; //[GEC] D64 Set Colors
 
 	TObjPtr<AActor> SoundTarget;
 
 	short		special;
 	short		lightlevel;
+	short		lightlevel_64;	// [GEC] blend wihte color D64
+	short		cpyspecial;		// [GEC] solo para copiar
+	ReverbContainer *EnvironmentSector;//[GEC] Set sound environment on Sector.
 	short		seqType;		// this sector's sound sequence
 
 	int			sky;
@@ -1084,6 +1112,7 @@ struct line_t
 	int 		validcount;	// if == validcount, already checked
 	int			locknumber;	// [Dusk] lock number for special
 	TObjPtr<ASkyViewpoint> skybox;
+	DWORD		gecflags;	// [GEC] Special Flags
 
 	bool isLinePortal() const
 	{

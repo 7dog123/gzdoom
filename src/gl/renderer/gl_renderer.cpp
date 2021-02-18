@@ -67,6 +67,8 @@
 #include "gl/utility/gl_templates.h"
 #include "gl/models/gl_models.h"
 
+#include "gl/scene/gl_skynew.h"//[GEC]
+
 //===========================================================================
 // 
 // Renderer interface
@@ -92,6 +94,8 @@ FGLRenderer::FGLRenderer(OpenGLFrameBuffer *fb)
 	gl_spriteindex = 0;
 	mShaderManager = NULL;
 	glpart2 = glpart = gllight = mirrortexture = NULL;
+	psx_light_wall = NULL;//[GEC] Nuevo
+	psx_light_plane = NULL;//[GEC] Nuevo
 }
 
 void FGLRenderer::Initialize()
@@ -100,6 +104,8 @@ void FGLRenderer::Initialize()
 	glpart = FTexture::CreateTexture(Wads.GetNumForFullName("glstuff/glpart.png"), FTexture::TEX_MiscPatch);
 	mirrortexture = FTexture::CreateTexture(Wads.GetNumForFullName("glstuff/mirror.png"), FTexture::TEX_MiscPatch);
 	gllight = FTexture::CreateTexture(Wads.GetNumForFullName("glstuff/gllight.png"), FTexture::TEX_MiscPatch);
+	psx_light_wall = FTexture::CreateTexture(Wads.GetNumForFullName("glstuff/psx_light_wall.png"), FTexture::TEX_MiscPatch);//[GEC] Nuevo
+	psx_light_plane = FTexture::CreateTexture(Wads.GetNumForFullName("glstuff/psx_light_plane.png"), FTexture::TEX_MiscPatch);//[GEC] Nuevo
 
 	mVBO = new FFlatVertexBuffer;
 	mFBID = 0;
@@ -119,6 +125,8 @@ FGLRenderer::~FGLRenderer()
 	if (glpart) delete glpart;
 	if (mirrortexture) delete mirrortexture;
 	if (gllight) delete gllight;
+	if (psx_light_wall) delete psx_light_wall;//[GEC] Nuevo
+	if (psx_light_plane) delete psx_light_plane;//[GEC] Nuevo
 	if (mFBID != 0) glDeleteFramebuffersEXT(1, &mFBID);
 }
 
@@ -377,6 +385,13 @@ void FGLRenderer::DrawTexture(FTexture *img, DCanvas::DrawParms &parms)
 	else
 	{
 		r = g = b = light;
+	}
+
+	if(parms.color != -1)//[GEC]
+	{
+		r = RPART(parms.color)/255.0f;
+		g = GPART(parms.color)/255.0f;
+		b = BPART(parms.color)/255.0f;
 	}
 	
 	// scissor test doesn't use the current viewport for the coordinates, so use real screen coordinates
@@ -645,3 +660,374 @@ void FGLRenderer::FillSimplePoly(FTexture *texture, FVector2 *points, int npoint
 	glEnd();
 }
 
+
+
+//==========================================================================
+//
+// Draws a fire texture
+//
+//==========================================================================
+
+typedef struct
+{
+    byte r;
+    byte g;
+    byte b;
+    byte a;
+
+	void SetRGBA(byte rr, byte gg, byte bb, byte aa) 
+	{ 
+		r = bb;
+		g = gg;
+		b = rr;
+		a = aa;
+	}
+} dPalette_t2;
+
+int firetex[64 * 128];
+unsigned char fireBuf[8192];
+dPalette_t2  firePal[256];
+
+int FIRESKYWIDTH = 64;
+int FIRESKYHEIGHT = 128;
+
+//
+// R_SpreadFirePSX
+//
+
+static void R_SpreadFirePSX(byte* src1, byte* src2, int pixel, int counter, int* rand)
+{
+    int randIdx = 0;
+    int randIdx2 = 0;
+    byte *tmpSrc;
+    
+    if(pixel != 0) 
+    {
+		//[GEC] Like PsxDoom
+        randIdx = (rndtable[*rand]);
+        randIdx2 = (rndtable[*rand+1]);
+        *rand = ((*rand+2) & 0xff);
+		fndindex = *rand;
+        
+        tmpSrc = (src1 + (((counter - (randIdx & 3)) + 1) & (FIRESKYWIDTH-1)));
+        
+        *(byte*)(tmpSrc - FIRESKYWIDTH) = pixel - ((randIdx2 & 1));
+    }
+    else
+    {
+        *(byte*)(src2 - FIRESKYWIDTH) = 0;                                                                                                                      
+    }
+}
+
+//
+// Fire_Out
+//
+
+void Fire_Out(void)
+{
+	int i;
+    for(i = ((FIRESKYWIDTH * FIRESKYHEIGHT) - FIRESKYWIDTH); i < (FIRESKYWIDTH*FIRESKYHEIGHT); i++) 
+    {
+        if(fireBuf[i] != 0){fireBuf[i] = (fireBuf[i] - 0x01);}
+    }
+}
+
+//
+// R_FirePSX
+//
+
+int Fire_Frame = 0;
+
+static void R_FirePSX(byte *buffer, bool fireout)
+{
+	if(Fire_Frame > 200 && fireout)
+    {
+        if(Fire_Frame > 248){Fire_Out();}
+        else if((Fire_Frame & 1) == 1){Fire_Out();}
+    }
+
+    int counter = 0;
+    int rand = 0;
+    int step = 0;
+    int pixel = 0;
+    byte *src;
+    byte *srcoffset;
+
+    rand = 0;
+    step = 0;
+    pixel = 0;
+
+	Fire_Frame++;
+    rand = fndindex;
+    src = buffer;
+    counter = 0;
+    src += FIRESKYWIDTH;
+    do 
+    {  // width
+        srcoffset = (src + counter);
+        pixel = *(byte*)srcoffset;
+
+        step = 2;
+
+        R_SpreadFirePSX(src, srcoffset, pixel, counter, &rand);
+
+        src += FIRESKYWIDTH;
+        srcoffset += FIRESKYWIDTH;
+
+        do 
+        {  // height
+            pixel = *(byte*)srcoffset;
+            step += 2;
+
+            R_SpreadFirePSX(src, srcoffset, pixel, counter, &rand);
+
+            pixel = *(byte*)(srcoffset + FIRESKYWIDTH);
+            src += FIRESKYWIDTH;
+            srcoffset += FIRESKYWIDTH;
+
+            R_SpreadFirePSX(src, srcoffset, pixel, counter, &rand);
+
+            pixel = *(byte*)(srcoffset + FIRESKYWIDTH);
+            src += FIRESKYWIDTH;
+            srcoffset += FIRESKYWIDTH;
+        }
+        while(step < FIRESKYHEIGHT);
+
+        
+        counter++;
+        src -= ((FIRESKYWIDTH*FIRESKYHEIGHT)-FIRESKYWIDTH);
+
+    }
+    while(counter < FIRESKYWIDTH);
+}
+
+//
+// R_InitFirePSX
+//
+
+void FGLRenderer::R_InitFirePSX_()
+{
+    int i;
+
+    memset(&firePal, 0, sizeof(dPalette_t2)*256);
+
+	firePal[0x00].SetRGBA(0x00,0x00,0x00,0x00);
+	firePal[0x01].SetRGBA(0x18,0x00,0x00,0xFF);
+	firePal[0x02].SetRGBA(0x29,0x08,0x00,0xFF);
+	firePal[0x03].SetRGBA(0x42,0x08,0x00,0xFF);
+	firePal[0x04].SetRGBA(0x51,0x10,0x00,0xFF);
+	firePal[0x05].SetRGBA(0x63,0x18,0x00,0xFF);
+	firePal[0x06].SetRGBA(0x73,0x18,0x00,0xFF);
+	firePal[0x07].SetRGBA(0x8C,0x21,0x00,0xFF);
+	firePal[0x08].SetRGBA(0x9C,0x29,0x00,0xFF);
+	firePal[0x09].SetRGBA(0xAD,0x39,0x00,0xFF);
+	firePal[0x0A].SetRGBA(0xBD,0x42,0x00,0xFF);
+	firePal[0x0B].SetRGBA(0xC6,0x42,0x00,0xFF);
+	firePal[0x0C].SetRGBA(0xDE,0x4A,0x00,0xFF);
+	firePal[0x0D].SetRGBA(0xDE,0x52,0x00,0xFF);
+	firePal[0x0E].SetRGBA(0xDE,0x52,0x00,0xFF);
+	firePal[0x0F].SetRGBA(0xD6,0x5A,0x00,0xFF);
+	firePal[0x10].SetRGBA(0xD6,0x5A,0x00,0xFF);
+	firePal[0x11].SetRGBA(0xD6,0x63,0x08,0xFF);
+	firePal[0x12].SetRGBA(0xCE,0x6B,0x08,0xFF);
+	firePal[0x13].SetRGBA(0xCE,0x73,0x08,0xFF);
+	firePal[0x14].SetRGBA(0xCE,0x7B,0x08,0xFF);
+	firePal[0x15].SetRGBA(0xCE,0x84,0x10,0xFF);
+	firePal[0x16].SetRGBA(0xC6,0x84,0x10,0xFF);
+	firePal[0x17].SetRGBA(0xC6,0x8C,0x10,0xFF);
+	firePal[0x18].SetRGBA(0xC6,0x94,0x18,0xFF);
+	firePal[0x19].SetRGBA(0xBD,0x9C,0x18,0xFF);
+	firePal[0x1A].SetRGBA(0xBD,0x9C,0x18,0xFF);
+	firePal[0x1B].SetRGBA(0xBD,0xA5,0x21,0xFF);
+	firePal[0x1C].SetRGBA(0xBD,0xA5,0x21,0xFF);
+	firePal[0x1D].SetRGBA(0xBD,0xAD,0x29,0xFF);
+	firePal[0x1E].SetRGBA(0xB5,0xAD,0x29,0xFF);
+	firePal[0x1F].SetRGBA(0xB5,0xB5,0x29,0xFF);
+	firePal[0x20].SetRGBA(0xB5,0xB5,0x31,0xFF);
+	firePal[0x21].SetRGBA(0xCE,0xCE,0x6B,0xFF);
+	firePal[0x22].SetRGBA(0xDE,0xDE,0x9C,0xFF);
+	firePal[0x23].SetRGBA(0xEF,0xEF,0xC6,0xFF);
+	firePal[0x24].SetRGBA(0xFF,0xFF,0xFF,0xFF);
+
+	for(i = 0x25; i <= 0xFE; i++) 
+	{
+	firePal[i].SetRGBA(0x00,0x00,0x00,0xFF);
+    }
+	firePal[0xFF].SetRGBA(0xFF,0xFF,0xFF,0xFF);
+
+	for(i = 0; i < (64*128); i++) 
+    {
+        if(i == 0)
+        fireBuf[i] = 0x01;      
+        else if(i < 8128)
+        fireBuf[i] = 0x00;
+        else
+        fireBuf[i] = 0x24;
+    }
+
+	Fire_Frame = 0;
+}
+
+//
+// R_FirePSXTicker
+//
+
+void FGLRenderer::R_FirePSXTicker_(bool fireout)
+{
+	R_FirePSX(fireBuf,fireout);
+}
+
+void FGLRenderer::DrawFireTexture(FTexture *img, DCanvas::DrawParms &parms)
+{
+	double xscale = parms.destwidth / parms.texwidth;
+	double yscale = parms.destheight / parms.texheight;
+	double x = parms.x - parms.left * xscale;
+	double y = parms.y - parms.top * yscale;
+	double w = parms.destwidth;
+	double h = parms.destheight;
+	float u1, v1, u2, v2, r, g, b;
+	float light = 1.f;
+
+	FMaterial * gltex = FMaterial::ValidateTexture(img);
+
+	if (parms.colorOverlay && (parms.colorOverlay & 0xffffff) == 0)
+	{
+		// Right now there's only black. Should be implemented properly later
+		light = 1.f - APART(parms.colorOverlay)/255.f;
+		parms.colorOverlay = 0;
+	}
+
+	if (!img->bHasCanvas)
+	{
+		if (!parms.alphaChannel) 
+		{
+			int translation = 0;
+			if (parms.remap != NULL && !parms.remap->Inactive)
+			{
+				GLTranslationPalette * pal = static_cast<GLTranslationPalette*>(parms.remap->GetNative());
+				if (pal) translation = -pal->GetIndex();
+			}
+			gltex->BindPatch(CM_DEFAULT, translation);
+		}
+		else 
+		{
+			// This is an alpha texture
+			gltex->BindPatch(CM_SHADE, 0);
+		}
+
+		u1 = gltex->GetUL();
+		v1 = gltex->GetVT();
+		u2 = gltex->GetUR();
+		v2 = gltex->GetVB();
+	}
+	else
+	{
+		gltex->Bind(CM_DEFAULT, 0, 0);
+		u2=1.f;
+		v2=-1.f;
+		u1 = v1 = 0.f;
+		gl_RenderState.SetTextureMode(TM_OPAQUE);
+	}
+	
+	if (parms.flipX)
+	{
+		float temp = u1;
+		u1 = u2;
+		u2 = temp;
+	}
+	
+
+	if (parms.windowleft > 0 || parms.windowright < parms.texwidth)
+	{
+		x += parms.windowleft * xscale;
+		w -= (parms.texwidth - parms.windowright + parms.windowleft) * xscale;
+
+		u1 = float(u1 + parms.windowleft / parms.texwidth);
+		u2 = float(u2 - (parms.texwidth - parms.windowright) / parms.texwidth);
+	}
+
+	if (parms.style.Flags & STYLEF_ColorIsFixed)
+	{
+		r = RPART(parms.fillcolor)/255.0f;
+		g = GPART(parms.fillcolor)/255.0f;
+		b = BPART(parms.fillcolor)/255.0f;
+	}
+	else
+	{
+		r = g = b = light;
+	}
+
+	if(parms.color != -1)//[GEC]
+	{
+		r = RPART(parms.color)/255.0f;
+		g = GPART(parms.color)/255.0f;
+		b = BPART(parms.color)/255.0f;
+	}
+	
+	//
+    // copy fire pixel data to texture data array
+    //
+    memset(firetex, 0, sizeof(int) * FIRESKYWIDTH * FIRESKYHEIGHT);
+    for(int i = 0; i < FIRESKYWIDTH * FIRESKYHEIGHT; i++)
+	{
+        byte rgb[4];
+
+        rgb[0] = firePal[fireBuf[i]].r;
+        rgb[1] = firePal[fireBuf[i]].g;
+        rgb[2] = firePal[fireBuf[i]].b;
+		rgb[3] = firePal[fireBuf[i]].a;
+
+		firetex[i] =  MAKEARGB(rgb[3], rgb[0], rgb[1], rgb[2]);
+    }
+
+	FHardwareTexture *firetex2;
+	firetex2 = new FHardwareTexture(64, 128, false, false, false, true);
+	firetex2->CreateTexture(NULL, 64, 128, false, 0, CM_DEFAULT);
+	glFlush();
+	firetex2->Bind(0, CM_DEFAULT);
+
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+    glTexSubImage2D(GL_TEXTURE_2D,0,0,0,FIRESKYWIDTH,FIRESKYHEIGHT,GL_RGBA,GL_UNSIGNED_BYTE,firetex);
+
+	// scissor test doesn't use the current viewport for the coordinates, so use real screen coordinates
+	int btm = (SCREENHEIGHT - screen->GetHeight()) / 2;
+	btm = SCREENHEIGHT - btm;
+
+	glEnable(GL_SCISSOR_TEST);
+	int space = (static_cast<OpenGLFrameBuffer*>(screen)->GetTrueHeight()-screen->GetHeight())/2;
+	glScissor(parms.lclip, btm - parms.dclip + space, parms.rclip - parms.lclip, parms.dclip - parms.uclip);
+	
+	gl_SetRenderStyle(parms.style, !parms.masked, false);
+	if (img->bHasCanvas)
+	{
+		gl_RenderState.SetTextureMode(TM_OPAQUE);
+	}
+
+	glColor4f(r, g, b, FIXED2FLOAT(parms.alpha));
+	
+	gl_RenderState.EnableAlphaTest(true);
+
+	gl_RenderState.Apply();
+	glBegin(GL_TRIANGLE_STRIP);
+	glTexCoord2f(u1, v1);
+	glVertex2d(x, y);
+	glTexCoord2f(u1, v2);
+	glVertex2d(x, y + h);
+	glTexCoord2f(u2, v1);
+	glVertex2d(x + w, y);
+	glTexCoord2f(u2, v2);
+	glVertex2d(x + w, y + h);
+	glEnd();
+
+	gl_RenderState.EnableAlphaTest(true);
+	
+	glScissor(0, 0, screen->GetWidth(), screen->GetHeight());
+	glDisable(GL_SCISSOR_TEST);
+	gl_RenderState.SetTextureMode(TM_MODULATE);
+	gl_RenderState.BlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	gl_RenderState.BlendEquation(GL_FUNC_ADD);
+
+	firetex2->Clean(true);
+}

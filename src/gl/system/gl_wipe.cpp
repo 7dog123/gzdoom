@@ -48,6 +48,8 @@
 #include "v_palette.h"
 #include "templates.h"
 #include "vectors.h"
+#include "v_video.h"
+#include "v_font.h"
 
 #include "gl/system/gl_interface.h"
 #include "gl/renderer/gl_renderer.h"
@@ -77,6 +79,42 @@ struct RECT {
 //===========================================================================
 
 // TYPES -------------------------------------------------------------------
+
+int LoadTicks;
+class OpenGLFrameBuffer::Wiper_LoadingScreen : public OpenGLFrameBuffer::Wiper//[GEC]
+{
+public:
+	Wiper_LoadingScreen();
+	bool Run(int ticks, OpenGLFrameBuffer *fb);
+
+/*private:
+	int fadetics;
+	int wipeFadeAlpha;*/
+};
+
+class OpenGLFrameBuffer::Wiper_FadeScreen : public OpenGLFrameBuffer::Wiper//[GEC]
+{
+public:
+	Wiper_FadeScreen();
+	bool Run(int ticks, OpenGLFrameBuffer *fb);
+
+private:
+	int fadetics;
+	int wipeFadeAlpha;
+};
+
+class OpenGLFrameBuffer::Wiper_Melt64 : public OpenGLFrameBuffer::Wiper//[GEC]
+{
+public:
+	Wiper_Melt64();
+	bool Run(int ticks, OpenGLFrameBuffer *fb);
+
+private:
+	int Clock;
+	int fadetics;
+	int wipeFadeAlpha;
+	float Y;
+};
 
 class OpenGLFrameBuffer::Wiper_Crossfade : public OpenGLFrameBuffer::Wiper
 {
@@ -138,6 +176,18 @@ bool OpenGLFrameBuffer::WipeStartScreen(int type)
 
 	case wipe_Melt:
 		ScreenWipe = new Wiper_Melt;
+		break;
+
+	case wipe_Melt64://[GEC]
+		ScreenWipe = new Wiper_Melt64;
+		break;
+
+	case wipe_FadeScreen://[GEC]
+		ScreenWipe = new Wiper_FadeScreen;
+		break;
+
+	case wipe_LoadingScreen://[GEC]
+		ScreenWipe = new Wiper_LoadingScreen;
 		break;
 
 	default:
@@ -249,6 +299,276 @@ OpenGLFrameBuffer::Wiper::~Wiper()
 {
 }
 
+// WIPE: FADESCREEN ---------------------------------------------------------
+
+//==========================================================================
+//
+// OpenGLFrameBuffer :: Wiper_Crossfade Constructor
+//
+//==========================================================================
+
+OpenGLFrameBuffer::Wiper_FadeScreen::Wiper_FadeScreen()
+{
+	fadetics = 8;
+	wipeFadeAlpha = 0xff;
+}
+
+//==========================================================================
+//
+// OpenGLFrameBuffer :: Wiper_Crossfade :: Run
+//
+//==========================================================================
+
+bool OpenGLFrameBuffer::Wiper_FadeScreen::Run(int ticks, OpenGLFrameBuffer *fb)
+{
+	//[GEC] Recrea el FadeScreen de Doom64 EX con exactitud
+	bool done = false;
+
+	float ur = fb->GetWidth() / FHardwareTexture::GetTexDimension(fb->GetWidth());
+	float vb = fb->GetHeight() / FHardwareTexture::GetTexDimension(fb->GetHeight());
+
+	//if(wipeFadeAlpha > 0)// FadeScreen
+	//{
+		if(wipeFadeAlpha < 0) 
+		{
+            //wipeFadeAlpha = 0;
+			done = true;
+        }
+
+		gl_RenderState.BlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
+		gl_RenderState.SetTextureMode(TM_OPAQUE);
+		gl_RenderState.EnableAlphaTest(false);
+		gl_RenderState.Apply();
+		fb->wipestartscreen->Bind(0, CM_DEFAULT);
+
+		float color = (float)(wipeFadeAlpha/255.f);
+
+		glColor4f(color, color, color, 1.0f);
+		glBegin(GL_TRIANGLE_STRIP);
+		glTexCoord2f(0, vb);
+		glVertex2i(0, 0);
+		glTexCoord2f(0, 0);
+		glVertex2i(0, fb->Height);
+		glTexCoord2f(ur, vb);
+		glVertex2i(fb->Width, 0);
+		glTexCoord2f(ur, 0);
+		glVertex2i(fb->Width, fb->Height);
+		glEnd();
+
+		wipeFadeAlpha -= fadetics;
+
+		gl_RenderState.EnableAlphaTest(true);
+		gl_RenderState.SetTextureMode(TM_MODULATE);
+	//}
+	//else done = true;
+
+	return done;
+}
+
+// WIPE: MELT64 ---------------------------------------------------------
+
+//==========================================================================
+//
+// OpenGLFrameBuffer :: Wiper_Melt64 Constructor
+//
+//==========================================================================
+
+OpenGLFrameBuffer::Wiper_Melt64::Wiper_Melt64()
+: Clock(0)
+{
+	Y = 0.f;
+	fadetics = 6;
+	wipeFadeAlpha = 0xff;
+}
+
+//==========================================================================
+//
+// OpenGLFrameBuffer :: Wiper_Melt64 :: Run
+//
+//==========================================================================
+
+bool OpenGLFrameBuffer::Wiper_Melt64::Run(int ticks, OpenGLFrameBuffer *fb)
+{
+	//[GEC] Recrea el Melt de Doom64 EX con exactitud
+	Clock += 2;
+	bool done = false;
+
+	float ur = fb->GetWidth() / FHardwareTexture::GetTexDimension(fb->GetWidth());
+	float vb = fb->GetHeight() / FHardwareTexture::GetTexDimension(fb->GetHeight());
+
+	if(Clock < 160)
+	{
+		gl_RenderState.BlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
+		gl_RenderState.SetTextureMode(TM_OPAQUE);
+		gl_RenderState.EnableAlphaTest(false);
+		gl_RenderState.Apply();
+		fb->wipestartscreen->Bind(0, CM_DEFAULT);
+		glColor4f(1.f, 1.f, 1.f, 1.0f);
+		glBegin(GL_TRIANGLE_STRIP);
+		glTexCoord2f(0, vb);
+		glVertex2i(0, 0);
+		glTexCoord2f(0, 0);
+		glVertex2i(0, fb->Height);
+		glTexCoord2f(ur, vb);
+		glVertex2i(fb->Width, 0);
+		glTexCoord2f(ur, 0);
+		glVertex2i(fb->Width, fb->Height);
+		glEnd();
+
+		gl_RenderState.BlendFunc(GL_SRC_ALPHA,GL_ONE);
+		gl_RenderState.SetTextureMode(TM_MASK);
+		gl_RenderState.Apply();
+		fb->wipestartscreen->Bind(0, CM_DEFAULT);
+		glColor4f(1.0, 0.0, 0.0, 0.003125);
+		glBegin(GL_TRIANGLE_STRIP);
+		glTexCoord2f(0, vb);
+		glVertex2i(0, 0);
+		glTexCoord2f(0, 0);
+		glVertex2i(0, fb->Height);
+		glTexCoord2f(ur, vb);
+		glVertex2i(fb->Width, 0);
+		glTexCoord2f(ur, 0);
+		glVertex2i(fb->Width, fb->Height);
+		glEnd();
+
+		gl_RenderState.BlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
+		gl_RenderState.SetTextureMode(TM_OPAQUE);
+		gl_RenderState.Apply();
+		fb->wipestartscreen->Bind(0, CM_DEFAULT);
+		glColor4f(1.f, 1.f, 1.f, (float)(0x10/255.f));
+		glBegin(GL_TRIANGLE_STRIP);
+		glTexCoord2f(0, vb);
+		glVertex2f(0, 0+(Y));
+		glTexCoord2f(0, 0);
+		glVertex2f(0, (float)fb->Height+(Y));
+		glTexCoord2f(ur, vb);
+		glVertex2f((float)fb->Width, 0+(Y));
+		glTexCoord2f(ur, 0);
+		glVertex2f((float)fb->Width, (float)fb->Height+(Y));
+		glEnd();
+
+		//
+        // Mueve la pantalla hacia abajo. Sin limpiar el marco, debemos
+        // obtener un buen efecto de fusión con el efecto HOM
+        //
+		Y += 1.006f;
+
+		//
+        // Actualiza buffer de pantalla
+        //
+		glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, fb->Width, fb->Height);
+
+		gl_RenderState.EnableAlphaTest(true);
+		gl_RenderState.SetTextureMode(TM_MODULATE);
+		gl_RenderState.BlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
+	}
+	else //if(wipeFadeAlpha > 0)// FadeScreen
+	{
+		if(wipeFadeAlpha < 0) 
+		{
+            //wipeFadeAlpha = 0;
+			done = true;
+        }
+
+		gl_RenderState.BlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
+		gl_RenderState.SetTextureMode(TM_OPAQUE);
+		gl_RenderState.EnableAlphaTest(false);
+		gl_RenderState.Apply();
+		fb->wipestartscreen->Bind(0, CM_DEFAULT);
+
+		float color = (float)(wipeFadeAlpha/255.f);
+
+		glColor4f(color, color, color, 1.0f);
+		glBegin(GL_TRIANGLE_STRIP);
+		glTexCoord2f(0, vb);
+		glVertex2i(0, 0);
+		glTexCoord2f(0, 0);
+		glVertex2i(0, fb->Height);
+		glTexCoord2f(ur, vb);
+		glVertex2i(fb->Width, 0);
+		glTexCoord2f(ur, 0);
+		glVertex2i(fb->Width, fb->Height);
+		glEnd();
+
+		wipeFadeAlpha -= fadetics;
+
+		gl_RenderState.EnableAlphaTest(true);
+		gl_RenderState.SetTextureMode(TM_MODULATE);
+	}
+	//else done = true;
+
+	return done;
+}
+
+
+// WIPE: LOADINGSCREEN ---------------------------------------------------------
+
+//==========================================================================
+//
+// OpenGLFrameBuffer :: Wiper_LoadingScreen Constructor
+//
+//==========================================================================
+
+FTexture *tex;
+OpenGLFrameBuffer::Wiper_LoadingScreen::Wiper_LoadingScreen()
+{
+	LoadTicks = 32;
+	const BITFIELD texflags = 1 | 64;
+	tex = TexMan.FindTexture ("LOADING",FTexture::TEX_MiscPatch, texflags);
+}
+
+//==========================================================================
+//
+// OpenGLFrameBuffer :: Wiper_Crossfade :: Run
+//
+// Fades the old screen into the new one over 32 ticks.
+//
+//==========================================================================
+
+bool OpenGLFrameBuffer::Wiper_LoadingScreen::Run(int ticks, OpenGLFrameBuffer *fb)
+{
+	if(LoadTicks > 0)
+	{
+		float ur = fb->GetWidth() / FHardwareTexture::GetTexDimension(fb->GetWidth());
+		float vb = fb->GetHeight() / FHardwareTexture::GetTexDimension(fb->GetHeight());
+
+		gl_RenderState.SetTextureMode(TM_OPAQUE);
+		gl_RenderState.EnableAlphaTest(false);
+		gl_RenderState.Apply();
+		fb->wipestartscreen->Bind(0, CM_DEFAULT);
+		glColor4f(1.f, 1.f, 1.f, 1.f);
+		glBegin(GL_TRIANGLE_STRIP);
+		glTexCoord2f(0, vb);
+		glVertex2i(0, 0);
+		glTexCoord2f(0, 0);
+		glVertex2i(0, fb->Height);
+		glTexCoord2f(ur, vb);
+		glVertex2i(fb->Width, 0);
+		glTexCoord2f(ur, 0);
+		glVertex2i(fb->Width, fb->Height);
+		glEnd();
+
+		if(tex)
+		{
+			screen->DrawTexture(tex, 0, 0,
+				DTA_VirtualWidthF, 256.0,
+				DTA_VirtualHeightF, 240.0,
+				//DTA_CleanNoMove, true,
+				TAG_DONE);
+		}
+		else
+		{
+			EColorRange color = CR_UNTRANSLATED;
+			screen->DrawText (BigFont, color, (256 - BigFont->StringWidth("Loading"))/2, 120.0, "Loading", DTA_ResWidthF, 256, DTA_ResHeightF, 240, TAG_DONE);
+		}
+
+		LoadTicks--;
+		return false;
+	}
+
+	return true;
+}
+
 // WIPE: CROSSFADE ---------------------------------------------------------
 
 //==========================================================================
@@ -269,7 +589,6 @@ OpenGLFrameBuffer::Wiper_Crossfade::Wiper_Crossfade()
 // Fades the old screen into the new one over 32 ticks.
 //
 //==========================================================================
-
 bool OpenGLFrameBuffer::Wiper_Crossfade::Run(int ticks, OpenGLFrameBuffer *fb)
 {
 	Clock += ticks;

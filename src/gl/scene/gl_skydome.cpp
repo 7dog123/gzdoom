@@ -55,6 +55,7 @@
 #include "gl/textures/gl_skyboxtexture.h"
 #include "gl/textures/gl_material.h"
 
+#include "gl/scene/gl_skynew.h"//[GEC]
 
 //-----------------------------------------------------------------------------
 //
@@ -111,7 +112,8 @@ static void SkyVertex(int r, int c)
 	
 	if (!foglayer)
 	{
-		gl_SetColor(255, 0, NULL, r==0? 0.0f : 1.0f);
+		//gl_SetColor(255, 0, NULL, r==0? 0.0f : 1.0f);
+		glColor4f(1.0, 1.0, 1.0, r==0? 0.0f : 1.0f);
 		
 		// And the texture coordinates.
 		if(!yflip)	// Flipped Y is for the lower hemisphere.
@@ -553,6 +555,7 @@ void GLSkyPortal::DrawContents()
 	// We have no use for Doom lighting special handling here, so disable it for this function.
 	int oldlightmode = glset.lightmode;
 	if (glset.lightmode == 8) glset.lightmode = 2;
+	if (glset.lightmode == 16) glset.lightmode = 2;//[GEC]
 
 
 	if (gl_fixedcolormap) 
@@ -586,11 +589,30 @@ void GLSkyPortal::DrawContents()
 		}
 		else R=G=B=1.f;
 
-		RenderBox(origin->skytexno1, origin->texture[0], origin->x_offset[0], CM_Index, origin->sky2);
+		//RenderBox(origin->skytexno1, origin->texture[0], origin->x_offset[0], CM_Index, origin->sky2);
+		FSkyBox * sb = static_cast<FSkyBox*>(origin->texture[0]->tex);
+		
+		if(sb->skyconsole)
+		{
+			glMatrixMode(GL_MODELVIEW);//[GEC]
+			glLoadIdentity();
+			glPushMatrix();
+			R_ShowSky(true);//[GEC]
+			R_DrawSky(CM_Index);
+			glPopMatrix();
+		}
+		else
+		{
+			R_ShowSky(false);//[GEC]
+			RenderBox(origin->skytexno1, origin->texture[0], origin->x_offset[0], CM_Index, origin->sky2);
+		}
+
 		gl_RenderState.EnableAlphaTest(true);
 	}
 	else
 	{
+		R_ShowSky(false);//[GEC]
+
 		if (origin->texture[0]==origin->texture[1] && origin->doublesky) origin->doublesky=false;	
 
 		if (origin->texture[0])

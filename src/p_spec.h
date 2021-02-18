@@ -263,7 +263,7 @@ class DFireFlicker : public DLighting
 {
 	DECLARE_CLASS (DFireFlicker, DLighting)
 public:
-	DFireFlicker (sector_t *sector);
+	DFireFlicker (sector_t *sector, bool psxmode);//[GEC]
 	DFireFlicker (sector_t *sector, int upper, int lower);
 	void		Serialize (FArchive &arc);
 	void		Tick ();
@@ -271,6 +271,7 @@ protected:
 	int 		m_Count;
 	int 		m_MaxLight;
 	int 		m_MinLight;
+	bool		m_psxmode;
 private:
 	DFireFlicker ();
 };
@@ -398,13 +399,183 @@ void	EV_StartLightFading (int tag, int value, int tics);
 
 
 //
+// [GEC] New LIGHTS D64 Psx
+//
+
+#define D64GLOWSPEED           2
+#define D64STROBEBRIGHT        1
+#define D64SUPERFAST           10
+#define D64FASTDARK            15
+#define D64SLOWDARK            30
+#define D64PULSENORMAL         0
+#define D64PULSESLOW           1
+#define D64PULSERANDOM         2
+
+//[GEC] PSX Glow Mode
+class DPsxGlow : public DLighting
+{
+	DECLARE_CLASS (DPsxGlow, DLighting)
+public:
+	DPsxGlow (sector_t *sector, int type);
+	void		Serialize (FArchive &arc);
+	void		Tick ();
+protected:
+	int 		m_MinLight;
+	int 		m_MaxLight;
+	int 		m_Direction;
+private:
+	DPsxGlow ();
+};
+
+class DFireFlicker64 : public DLighting
+{
+	DECLARE_CLASS (DFireFlicker64, DLighting)
+public:
+	DFireFlicker64 (sector_t *sector);
+	void		Serialize (FArchive &arc);
+	void		Tick ();
+protected:
+	int 		m_Count;
+	int         m_Special;
+private:
+	DFireFlicker64 ();
+};
+
+class DLightFlash64 : public DLighting
+{
+	DECLARE_CLASS (DLightFlash64, DLighting)
+public:
+	DLightFlash64 (sector_t *sector);
+	void		Serialize (FArchive &arc);
+	void		Tick ();
+protected:
+	int 		m_Count;
+	int         m_Special;
+private:
+	DLightFlash64 ();
+};
+
+class DStrobe64 : public DLighting
+{
+	DECLARE_CLASS (DStrobe64, DLighting)
+public:
+	DStrobe64 (sector_t *sector, int speed, bool alternate);
+	void		Serialize (FArchive &arc);
+	void		Tick ();
+protected:
+	int         m_Count;
+    int         m_Maxlight;
+    int         m_Darktime;
+    int         m_Brighttime;
+    int         m_Special;
+private:
+	DStrobe64 ();
+};
+
+class DGlow64 : public DLighting
+{
+	DECLARE_CLASS (DGlow64, DLighting)
+public:
+	DGlow64 (sector_t *sector, int type);
+	void		Serialize (FArchive &arc);
+	void		Tick ();
+protected:
+	int         m_Type;
+    int         m_Count;
+    int         m_Minlight;
+    int         m_Direction;
+    int         m_Maxlight;
+    int         m_Special;
+private:
+	DGlow64 ();
+};
+
+class DSequenceGlow64 : public DLighting
+{
+	DECLARE_CLASS (DSequenceGlow64, DLighting)
+public:
+	DSequenceGlow64 (sector_t *sector, bool first);
+	void		Serialize (FArchive &arc);
+	void		Tick ();
+protected:
+    sector_t     *m_Headsector;
+    int          m_Count;
+    int          m_Start;
+    int          m_Index;
+    int          m_Special;
+private:
+	DSequenceGlow64 ();
+};
+
+class DCombine64 : public DLighting
+{
+	DECLARE_CLASS (DCombine64, DLighting)
+public:
+	DCombine64 (sector_t *sector, sector_t *combine);
+	void		Serialize (FArchive &arc);
+	void		Tick ();
+protected:
+	//sector_t    *m_Sector;
+    sector_t    *m_Combine;
+private:
+	DCombine64 ();
+};
+
+class DLightMorph : public DLighting
+{
+	DECLARE_CLASS (DLightMorph, DLighting)
+public:
+	DLightMorph (sector_t *sector, PalEntry destcolor, PalEntry srccolor, PalEntry destcolorbase, int color);
+	void		Serialize (FArchive &arc);
+	void		Tick ();
+protected:
+	PalEntry m_Dest;
+	PalEntry m_Src;
+	PalEntry m_RGB;
+	PalEntry m_NewRGB;
+    int m_Inc;
+	int m_color;
+private:
+	DLightMorph ();
+};
+/*
+typedef struct {
+    thinker_t thinker;
+    light_t *dest;
+    light_t *src;
+    int r;
+    int g;
+    int b;
+    int inc;
+} lightmorph_t;*/
+
+//------------[GEC]-----------//
+// FADE IN BRIGHTNESS EFFECT
+void R_RefreshBrightness(void);
+void R_FadeInBrightness(void);
+void R_SetLightFactorSector(float lightfactor, sector_t *sec);
+class DFadeInBrightness : public DThinker
+{
+	DECLARE_CLASS (DFadeInBrightness, DThinker)
+public:
+	DFadeInBrightness (float factor);
+	void		Tick ();
+protected:
+	void Destroy();
+	float m_factor;
+private:
+	DFadeInBrightness ();
+};
+
+//
 // P_SWITCH
 //
 
-#define BUTTONTIME TICRATE		// 1 second, in ticks. 
+#define BUTTONTIME TICRATE//(ticratemode != 0 ? (TICRATE/2) : TICRATE)		// 1 second, in ticks. 
 
 bool	P_ChangeSwitchTexture (side_t *side, int useAgain, BYTE special, bool *quest=NULL);
 bool	P_CheckSwitchRange(AActor *user, line_t *line, int sideno);
+bool	P_CheckUseHeight(line_t *line, AActor *user, int sideno);//[GEC] D64
 
 //
 // P_PLATS
@@ -436,6 +607,8 @@ public:
 		platDownToNearestFloor,
 		platDownToLowestCeiling,
 		platRaiseAndStayLockout,
+		platDownByValue2,//[GEC]
+		platUpByValue2,//[GEC]
 	};
 
 	void Serialize (FArchive &arc);
@@ -534,7 +707,7 @@ public:
 	};
 
 	DDoor (sector_t *sector);
-	DDoor (sector_t *sec, EVlDoor type, fixed_t speed, int delay, int lightTag);
+	DDoor (sector_t *sec, EVlDoor type, fixed_t speed, int delay, int lightTag, bool splitdoor);
 
 	void Serialize (FArchive &arc);
 	void Tick ();
@@ -555,6 +728,9 @@ protected:
 	int 		m_TopCountdown;
 
 	int			m_LightTag;
+
+	//[GEC] D64 Vertical Door
+	bool		m_SplitDoor;
 
 	void DoorSound (bool raise, class DSeqNode *curseq=NULL) const;
 
@@ -647,7 +823,9 @@ public:
 
 		genCeilingChg0,
 		genCeilingChgT,
-		genCeilingChg
+		genCeilingChg,
+
+		silentCrushAndRaise,//[GEC]
 	};
 
 	DCeiling (sector_t *sec);
@@ -658,7 +836,7 @@ public:
 
 	static DCeiling *Create(sector_t *sec, DCeiling::ECeiling type, line_t *line, int tag,
 						fixed_t speed, fixed_t speed2, fixed_t height,
-						int crush, int silent, int change, bool hexencrush);
+						int crush, int silent, int change, bool hexencrush, bool d64mode);
 
 protected:
 	ECeiling	m_Type;
@@ -671,6 +849,7 @@ protected:
 	bool		m_Hexencrush;
 	int			m_Silent;
 	int 		m_Direction;	// 1 = up, 0 = waiting, -1 = down
+	bool		m_D64Mode;		// [GEC]
 
 	// [RH] Need these for BOOM-ish transferring ceilings
 	FTextureID	m_Texture;
@@ -691,7 +870,7 @@ private:
 
 bool EV_DoCeiling (DCeiling::ECeiling type, line_t *line,
 	int tag, fixed_t speed, fixed_t speed2, fixed_t height,
-	int crush, int silent, int change, bool hexencrush);
+	int crush, int silent, int change, bool hexencrush, bool d64mode = false);//[GEC]
 bool EV_CeilingCrushStop (int tag);
 void P_ActivateInStasisCeiling (int tag);
 

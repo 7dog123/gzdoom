@@ -349,6 +349,13 @@ void AActor::Serialize (FArchive &arc)
 			<< RipLevelMax;
 	}
 
+	//[GEC] Esto solo es para el laser
+	if (SaveVersion >= 4519)
+	{
+		arc << RenderLaser
+			<< LaserAngle;
+	}
+
 	{
 		FString tagstr;
 		if (arc.IsStoring() && Tag != NULL && Tag->Len() > 0) tagstr = *Tag;
@@ -1280,6 +1287,53 @@ void P_ExplodeMissile (AActor *mo, line_t *line, AActor *target)
 		// [RH] Don't explode missiles on horizon lines.
 		mo->Destroy ();
 		return;
+	}
+
+	// [GEC]
+	// Don't explode missiles 
+	if (line != NULL)
+	{
+		sector_t *front, *back;
+		fixedvec3 pos = mo->PosRelative(line);
+
+		if (line->sidedef[0])
+		{
+			front = line->frontsector;
+			back = line->backsector;
+		}
+		else
+		{
+			front = line->backsector;
+			back = line->frontsector;
+		}
+
+		if (back == NULL)
+		{
+			FTexture *texmid = TexMan[line->sidedef[0]->GetTexture(side_t::mid)];
+			if (texmid->bNoProjectileMiddle)
+			{
+				mo->Destroy();
+				return;
+			}
+		}
+		else if (back->floorplane.ZatPoint (pos.x, pos.y) >= pos.z)
+		{
+			FTexture *texbottom = TexMan[line->sidedef[0]->GetTexture(side_t::bottom)];
+			if (texbottom->bNoProjectileBottom)
+			{
+				mo->Destroy();
+				return;
+			}
+		}
+		else if (back->ceilingplane.ZatPoint (pos.x, pos.y) <= pos.z)
+		{
+			FTexture *textop = TexMan[line->sidedef[0]->GetTexture(side_t::top)];
+			if (textop->bNoProjectileTop)
+			{
+				mo->Destroy();
+				return;
+			}
+		}
 	}
 
 	if (line != NULL && cl_missiledecals)
@@ -2225,6 +2279,9 @@ explode:
 
 		fixed_t friction = P_GetFriction (mo, NULL);
 
+		//Printf("friction %d %X %f\n",friction,friction,FIXED2FLOAT(friction));
+		//Printf("frictions %d %X %f\n",0xd200,0xd200,FIXED2FLOAT(0xd200));
+
 		mo->velx = FixedMul (mo->velx, friction);
 		mo->vely = FixedMul (mo->vely, friction);
 
@@ -2466,7 +2523,7 @@ void P_ZMovement (AActor *mo, fixed_t oldfloorz)
 			mo->SetZ(mo->floorz);
 			if (mo->velz < 0)
 			{
-				const fixed_t minvel = -8*FRACUNIT;	// landing speed from a jump with normal gravity
+				/*const */fixed_t minvel = -8*FRACUNIT;	// landing speed from a jump with normal gravity
 
 				// Spawn splashes, etc.
 				P_HitFloor (mo);
@@ -2482,6 +2539,8 @@ void P_ZMovement (AActor *mo, fixed_t oldfloorz)
 				mo->HitFloor ();
 				if (mo->player)
 				{
+					if(mo->player->mo->LandingSpeed < 0){minvel = mo->player->mo->LandingSpeed;}//[GEC]
+
 					if (mo->player->jumpTics < 0 || mo->velz < minvel)
 					{ // delay any jumping for a short while
 						mo->player->jumpTics = 7;
@@ -3117,7 +3176,7 @@ void AActor::SetShade (int r, int g, int b)
 	fillcolor = MAKEARGB(ColorMatcher.Pick (r, g, b), r, g, b);
 }
 
-void AActor::SetPitch(int p, bool interpolate, bool forceclamp)
+void AActor::SetPitch(int p, bool interpolate, bool forceclamp, bool recoil)
 {
 	if (player != NULL || forceclamp)
 	{ // clamp the pitch we set
@@ -3137,7 +3196,15 @@ void AActor::SetPitch(int p, bool interpolate, bool forceclamp)
 	}
 	if (p != pitch)
 	{
-		pitch = p;
+		if (player != NULL && recoil)// [GEC][d64] - recoil pitch from weapons
+		{
+			recoilpitch = p;
+		}
+		else
+		{
+			pitch = p;
+		}
+
 		if (player != NULL && interpolate)
 		{
 			player->cheats |= CF_INTERPVIEW;
@@ -3739,6 +3806,20 @@ void AActor::Tick ()
 				return;				// freed itself
 		}
 	}
+
+	if (player != NULL)//[GEC]
+	{
+		// [GEC][d64] - recoil pitch from weapons
+		if(recoilpitch >> ANGLETOFINESHIFT)
+		{
+			recoilpitch -= (recoilpitch >> 2);
+		}
+		else
+		{
+			recoilpitch = 0;
+		}
+	}
+
 	// cycle through states, calling action functions at transitions
 	if (tics != -1)
 	{
@@ -4122,7 +4203,8 @@ AActor *AActor::StaticSpawn (const PClass *type, fixed_t ix, fixed_t iy, fixed_t
 	// And for secrets
 	if (actor->flags5 & MF5_COUNTSECRET)
 	{
-		level.total_secrets++;
+		if(!(actor->flags8 & MF8_NOCOUNTSECRET))// [GEC] Force No Count Secret
+			level.total_secrets++;
 	}
 	return actor;
 }
@@ -4202,8 +4284,14 @@ void AActor::HandleSpawnFlags ()
 		{
 			//Printf("Secret %s in sector %i!\n", GetTag(), Sector->sectornum);
 			flags5 |= MF5_COUNTSECRET;
-			level.total_secrets++;
+			if(!(flags8 & MF8_NOCOUNTSECRET))// [GEC] Force no Count Secret
+				level.total_secrets++;
 		}
+	}
+
+	if (SpawnFlags & MTF_NOINFIGHTING) // [GEC] Set No Infighting Enemy
+	{
+		flags5 |= MF5_NOINFIGHTING;
 	}
 }
 
@@ -4542,6 +4630,8 @@ APlayerPawn *P_SpawnPlayer (FPlayerStart *mthing, int playernum, int flags)
 	p->MinPitch = p->MaxPitch = 0;	// will be filled in by PostBeginPlay()/netcode
 	p->MUSINFOactor = NULL;
 	p->MUSINFOtics = -1;
+	p->bfgcolor = 0;//[GEC]
+	p->bfgticdown = 0;//[GEC]
 
 	p->velx = p->vely = 0;		// killough 10/98: initialize bobbing to 0.
 
@@ -6426,7 +6516,9 @@ void AActor::ClearCounters()
 	// And finally for secrets
 	if (flags5 & MF5_COUNTSECRET)
 	{
+		if(!(flags8 & MF8_NOCOUNTSECRET))// [GEC] Force no Count Secret
 		level.total_secrets--;
+
 		flags5 &= ~MF5_COUNTSECRET;
 	}
 }
@@ -6524,4 +6616,550 @@ void PrintMiscActorInfo(AActor *query)
 			FIXED2FLOAT(query->Speed), FIXED2FLOAT(query->velx), FIXED2FLOAT(query->vely), FIXED2FLOAT(query->velz),
 			sqrt(pow(FIXED2FLOAT(query->velx), 2) + pow(FIXED2FLOAT(query->vely), 2) + pow(FIXED2FLOAT(query->velz), 2)));
 	}
+}
+
+//-----------------------------------------------------------------------------
+//
+// [GEC]
+// P_FadeMobj
+//
+//-----------------------------------------------------------------------------
+
+IMPLEMENT_CLASS (P_FadeMobj)
+
+P_FadeMobj::P_FadeMobj ()
+{
+}
+
+void P_FadeMobj::Serialize (FArchive &arc)
+{
+	Super::Serialize (arc);
+	arc << m_remove << m_flagReserve << m_destAlpha << m_amount << m_self;
+}
+
+//-----------------------------------------------------------------------------
+//
+//-----------------------------------------------------------------------------
+void P_FadeMobj::Destroy()
+{
+	Super::Destroy();
+}
+
+//-----------------------------------------------------------------------------
+//
+//-----------------------------------------------------------------------------
+
+void P_FadeMobj::Tick ()
+{
+	if(m_self->alpha == m_destAlpha)
+	{
+		Destroy();
+		return;
+    }
+	
+	m_self->alpha += m_amount;
+
+	if(m_amount <= 0)
+	{
+        if(m_destAlpha < m_self->alpha)
+		{
+            return;
+        }
+
+        m_self->alpha = m_destAlpha;
+
+        if(m_destAlpha == 0)
+		{
+			if(m_remove)
+			{
+				P_RemoveThing(m_self);
+			}
+        }
+
+		Destroy();
+		return;
+    }
+
+    if(m_self->alpha < m_destAlpha)
+	{
+        return;
+    }
+
+    m_self->alpha = m_destAlpha;
+
+    if(m_flagReserve)
+	{
+        m_self->flags |= (ActorFlag) m_flagReserve;
+		//self->flags2 &= ~MF2_NONSHOOTABLE;
+		//self->flags |= MF_SHOOTABLE;
+    }
+
+	Destroy();
+}
+
+//-----------------------------------------------------------------------------
+//
+//-----------------------------------------------------------------------------
+
+P_FadeMobj::P_FadeMobj (AActor *self, fixed_t amount, fixed_t alpha, int flags, bool remove, bool recopy)
+{
+	m_self = self;
+	m_amount = amount;
+	m_destAlpha = alpha;
+    
+	m_remove = remove;
+
+	if(recopy)
+	{
+		if(m_self->flags & MF_SHOOTABLE)
+		{
+			flags |= MF_SHOOTABLE;
+			m_self->flags &= ~MF_SHOOTABLE;
+		}
+
+		if(m_self->flags & MF_SPECIAL)
+		{
+			flags |= MF_SPECIAL;
+			m_self->flags &= ~MF_SPECIAL;
+		}
+	}
+
+	m_flagReserve = flags;
+}
+
+
+//-----------------------------------------------------------------------------
+//
+// [GEC]
+// T_MobjExplode
+//
+//-----------------------------------------------------------------------------
+
+IMPLEMENT_CLASS (T_MobjExplode)
+
+T_MobjExplode::T_MobjExplode ()
+{
+}
+
+void T_MobjExplode::Serialize (FArchive &arc)
+{
+	Super::Serialize (arc);
+	arc << m_delaymax << m_lifetime << m_delay << m_type << m_self;
+}
+
+//-----------------------------------------------------------------------------
+//
+//-----------------------------------------------------------------------------
+void T_MobjExplode::Destroy()
+{
+	Super::Destroy();
+}
+
+//-----------------------------------------------------------------------------
+//
+//-----------------------------------------------------------------------------
+static FRandom pr_mobjexplode("EXPLODE");
+
+void T_MobjExplode::Tick ()
+{
+	fixed_t x;
+    fixed_t y;
+    fixed_t z;
+	AActor *mo;
+
+    if(m_delay-- > 0)
+	{
+        return;
+    }
+
+    m_delay = m_delaymax;
+
+	if(m_self->state  != NULL)
+	{
+		x = ( (pr_mobjexplode.Random2()<<14) + m_self->X());
+        y = ( (pr_mobjexplode.Random2()<<14) + m_self->Y());
+        z = ( (pr_mobjexplode.Random2()<<14) + m_self->Z());
+
+		mo = Spawn(m_type, x, y, z + (m_self->height << 1), ALLOW_REPLACE);
+
+        if(!(m_lifetime & 1))
+		{
+			S_Sound (mo, CHAN_VOICE, mo->DeathSound, 1, ATTN_NORM);
+        }
+    }
+
+    if(!m_lifetime--)
+	{
+		Destroy();
+    }
+}
+
+//-----------------------------------------------------------------------------
+//
+//-----------------------------------------------------------------------------
+
+T_MobjExplode::T_MobjExplode (AActor *self, const PClass *type, int delaydraw, int drawcount)
+{
+	m_self = self;
+	m_type = type;
+	m_delay = 0;
+    m_lifetime = drawcount;
+    m_delaymax = delaydraw;
+}
+
+
+//-----------------------------------------------------------------------------
+//
+// [GEC]
+// T_LaserThinker solo en "GL"
+//
+//-----------------------------------------------------------------------------
+
+#define dcos(angle) finecosine[(angle) >> ANGLETOFINESHIFT]
+#define dsin(angle) finesine[(angle) >> ANGLETOFINESHIFT]
+
+IMPLEMENT_CLASS (T_LaserThinker)
+
+T_LaserThinker::T_LaserThinker ()
+{
+}
+
+void T_LaserThinker::Serialize (FArchive &arc)
+{
+	Super::Serialize (arc);
+	arc << m_lasermarker << m_dest
+		<< m_x1 << m_y1 << m_z1
+		<< m_x2 << m_y2 << m_z2
+		<< m_slopex << m_slopey << m_slopez
+		<< m_dist << m_distmax << m_speed << m_angle;
+}
+
+//-----------------------------------------------------------------------------
+//
+//
+//
+//-----------------------------------------------------------------------------
+void T_LaserThinker::Destroy()
+{
+	Super::Destroy();
+}
+
+//-----------------------------------------------------------------------------
+//
+//-----------------------------------------------------------------------------
+
+void T_LaserThinker::Tick ()
+{
+	m_dist += 64;
+
+	// laser reached its destination?
+	if (m_dist >= m_distmax)
+	{
+		if (m_dest)
+		{
+			new P_FadeMobj(m_dest, -FLOAT2FIXED((float)(24/255.f)), 0, 0, true, false);
+		}
+
+		P_RemoveThing(m_lasermarker);
+		Destroy();
+	}
+	else
+	{
+		// update laser's location
+		m_lasermarker->LaserStart.X += FIXED2FLOAT(m_slopex);
+		m_lasermarker->LaserStart.Y += FIXED2FLOAT(m_slopey);
+		m_lasermarker->LaserStart.Z += FIXED2FLOAT(m_slopez);
+	}
+}
+
+//-----------------------------------------------------------------------------
+//
+//-----------------------------------------------------------------------------
+
+//#define LASERRANGE        (4096*FRACUNIT)
+//#define LASERAIMHEIGHT    (40*FRACUNIT)
+#define LASERDISTANCE    (30*FRACUNIT)
+
+static FRandom pr_laser ("Laser");
+
+fixed_t laserhit_x;
+fixed_t laserhit_y;
+fixed_t laserhit_z;
+
+#include "p_trace.h"
+
+T_LaserThinker::T_LaserThinker (AActor *self, const PClass *laser, const PClass *puff, fixed_t spawnheight, angle_t angle, fixed_t range)
+{
+	AActor		*linetarget;
+	angle_t     angleoffs;
+    fixed_t     slope;
+    fixed_t     x, y, z;
+	int    hitdice;
+	int    damage;
+
+	fixed_t LASERAIMHEIGHT = spawnheight + self->GetBobOffset() + (self->player? self->player->crouchoffset : 0);
+	fixed_t LASERRANGE = range;
+
+	m_lasermarker = NULL;
+	m_dest = NULL;
+
+	angleoffs = 0;
+    angleoffs = self->angle + angle;
+
+	// setup laser beams
+	slope = P_AimLineAttack(self, angleoffs, LASERRANGE, &linetarget);
+
+	hitdice = (pr_laser() & 7);
+    damage = (((hitdice << 2) + hitdice) << 1) + 10;
+
+	if(linetarget)
+	{
+		angleoffs -= angle;
+	}
+
+	if (puff)
+	{
+		m_dest = P_LineAttack (self, angleoffs, LASERRANGE, slope, damage, NAME_Hitscan, puff, LAF_NORANDOMPUFFZ/* | LAF_GETHITPOS*/, &linetarget);
+	}
+
+    // setup laser
+
+    // setup laser head point
+	// start of laser
+    m_x1 = self->X() + FixedMul(LASERDISTANCE, dcos(self->angle))/*+ spawnofs_xy*/;
+    m_y1 = self->Y() + FixedMul(LASERDISTANCE, dsin(self->angle));
+    m_z1 = (self->Z() + LASERAIMHEIGHT);
+
+	// end of laser
+	m_x2 = laserhit_x;
+    m_y2 = laserhit_y;
+    m_z2 = laserhit_z;
+
+	 // setup movement slope
+	slope = -((slope/0x1FFF));
+	m_slopex = (dcos(angleoffs) << 5);
+    m_slopey = (dsin(angleoffs) << 5);
+    m_slopez = slope ? (slope << 5) : 0;
+
+	// setup distance info
+    x = (m_x1 - m_x2) >> FRACBITS;
+    y = (m_y1 - m_y2) >> FRACBITS;
+    z = (m_z1 - m_z2) >> FRACBITS;
+
+	m_dist = 0;
+    m_distmax = (int)sqrt(((float)x * (float)x) + ((float)y * (float)y) + ((float)z * (float)z));
+
+	m_angle = angleoffs;
+
+	if (laser)
+	{
+		m_lasermarker = Spawn (laser, m_x2, m_y2, m_z2, ALLOW_REPLACE);
+
+		//if ((m_lasermarker->flags8 & MF8_RENDERLASER))
+			m_lasermarker->RenderLaser = true;
+
+		m_lasermarker->LaserAngle = m_angle;
+		m_lasermarker->LaserStart.X = FIXED2FLOAT(m_x1);
+		m_lasermarker->LaserStart.Y = FIXED2FLOAT(m_y1);
+		m_lasermarker->LaserStart.Z = FIXED2FLOAT(m_z1);
+		m_lasermarker->LaserEnd.X = FIXED2FLOAT(m_x2);
+		m_lasermarker->LaserEnd.Y = FIXED2FLOAT(m_y2);
+		m_lasermarker->LaserEnd.Z = FIXED2FLOAT(m_z2);
+	}
+}
+
+
+//-----------------------------------------------------------------------------
+//
+// [GEC]
+// P_SetMovingCamera
+//
+//-----------------------------------------------------------------------------
+
+#define CAMMOVESPEED    164
+#define CAMTRACEANGLE   ANGLE_1
+
+//
+// P_AdjustAngle
+//
+
+angle_t P_AdjustAngle(angle_t angle, angle_t newangle, int threshold) {
+    angle_t delta;
+
+    delta = newangle - angle;
+
+    if(delta < (angle_t)threshold || delta > (angle_t)-threshold) {
+        return newangle;
+    }
+    else {
+        if(delta < ANG180) {
+            return angle + threshold;
+        }
+        else {
+            return angle - threshold;
+        }
+    }
+
+    // no change
+    return angle;
+}
+
+IMPLEMENT_CLASS (P_SetMovingCamera)
+
+P_SetMovingCamera::P_SetMovingCamera ()
+{
+}
+
+void P_SetMovingCamera::Serialize (FArchive &arc)
+{
+	Super::Serialize (arc);
+	arc << m_x << m_y << m_z << m_slopex << m_slopey << m_slopez << m_player << m_current << m_tic;
+}
+
+//-----------------------------------------------------------------------------
+//
+//-----------------------------------------------------------------------------
+void P_SetMovingCamera::Destroy()
+{
+	Super::Destroy();
+}
+
+//-----------------------------------------------------------------------------
+//
+//-----------------------------------------------------------------------------
+
+void P_SetMovingCamera::Tick ()
+{
+	int dist;
+    AActor *mo_camera = NULL;
+    AActor *camtarget;
+	fixed_t cam_x, cam_y, cam_z;
+
+    camtarget = m_player->camera;
+
+    //
+    // adjust angle
+    //
+    camtarget->angle = P_AdjustAngle(camtarget->angle,
+                                     R_PointToAngle2(camtarget->X(), camtarget->Y(), m_x, m_y),
+                                     CAMTRACEANGLE);
+    //
+    // adjust pitch
+    //
+    dist = P_AproxDistance(camtarget->X() - m_x, camtarget->Y() - m_y);
+    if(dist >= (48*FRACUNIT)) {
+
+        camtarget->pitch = P_AdjustAngle(camtarget->pitch,
+                                         R_PointToAngle2(0, m_z, dist, camtarget->Z()),//R_PointToPitch(camtarget->Z(), m_z, dist),
+                                         CAMTRACEANGLE);
+    }
+
+    //
+    // adjust camera position
+    //
+    m_tic++;
+    if(m_tic < CAMMOVESPEED)
+	{
+		cam_x = camtarget->X() + m_slopex;
+		cam_y = camtarget->Y() + m_slopey;
+		cam_z = camtarget->Z() + m_slopez;
+
+		camtarget->SetXYZ(cam_x, cam_y, cam_z);
+        return;
+    }
+
+	//
+	// jump to next camera spot
+	//
+
+	FActorIterator iterator (m_current);
+	while ((mo_camera = iterator.Next()) != NULL)
+	{
+		// not a camera
+		if((mo_camera->GetClass()->TypeName != FName("AimingCamera")))
+		{
+			continue;
+		}
+
+		// must match tid
+		if(mo_camera->tid != m_current)
+		{
+			continue;
+		}
+
+		m_slopex = (mo_camera->X() - camtarget->X()) / CAMMOVESPEED;
+		m_slopey = (mo_camera->Y() - camtarget->Y()) / CAMMOVESPEED;
+		m_slopez = (mo_camera->Z() - camtarget->Z()) / CAMMOVESPEED;
+		
+		m_current++;
+		m_tic = 0;
+		return;
+	}
+	
+	// [kex] remove thinker after its done
+	Destroy();
+}
+
+//-----------------------------------------------------------------------------
+//
+//-----------------------------------------------------------------------------
+
+P_SetMovingCamera::P_SetMovingCamera (int tag)
+{
+	//Printf("P_SetMovingCamera\n");
+	player_t *player;// = &players[consoleplayer];
+	for (int i = 0; i < MAXPLAYERS; i++)
+	{
+		if (!playeringame[i])
+			continue;
+
+		player = &players[i];
+	}
+
+	AActor *mo_camera = NULL;
+	if (tag != 0)
+	{
+		FActorIterator iterator (tag);
+		while ((mo_camera = iterator.Next()) != NULL)
+		{
+			// must match tid
+			if(mo_camera->tid != tag) {
+				continue;
+			}
+			
+			AActor *oldcamera = player->camera;
+
+			// setup moving camera
+			m_x = mo_camera->X();
+			m_y = mo_camera->Y();
+			m_z = mo_camera->Z();
+			m_slopex = 0;
+			m_slopey = 0;
+			m_slopez = 0;
+			m_current = mo_camera->tid + 1;
+			m_tic = CAMMOVESPEED;
+
+			// set camera target
+			fixed_t cam_x, cam_y;
+			mo_camera->angle = oldcamera->angle;
+			cam_x = oldcamera->X();
+			cam_y = oldcamera->Y();
+			mo_camera->SetXY(cam_x,cam_y);
+
+			player->camera = mo_camera;
+
+			if (oldcamera != player->camera)
+			{
+				R_ClearPastViewer (player->camera);
+			}
+
+			// [kex] store player information
+			m_player = player;
+
+			return;
+		}
+	}
+
+	//[GEC] remove thinker
+	Destroy();
 }

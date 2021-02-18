@@ -258,6 +258,18 @@ static FFlagDef ActorFlagDefs[]=
 	DEFINE_FLAG(MF7, LAXTELEFRAGDMG, AActor, flags7),
 	DEFINE_FLAG(MF7, ICESHATTER, AActor, flags7),
 
+	//[GEC] Flags
+	DEFINE_FLAG(MF8, MOVECOUNTD64, AActor, flags8),//[GEC]
+	DEFINE_FLAG(MF8, WAITLOOK, AActor, flags8),//[GEC]
+	DEFINE_FLAG(MF8, TRIGGERINCHASEONLY, AActor, flags8),// [GEC] Doom psx & Doom64 monsters in chase execute triggers
+	DEFINE_FLAG(MF8, SEETARGET, AActor, flags8),//[GEC]
+	DEFINE_FLAG(MF8, RENDERLASER, AActor, flags8),//[GEC]
+	DEFINE_FLAG(MF8, NOREMOVE, AActor, flags8),//[GEC]
+	DEFINE_FLAG(MF8, NODRAWMAP, AActor, flags8),//[GEC]
+	DEFINE_FLAG(MF8, NODMGTHRUSTZ, AActor, flags8),//[GEC]
+	DEFINE_FLAG(MF8, NOCOUNTSECRET, AActor, flags8),//[GEC]
+	DEFINE_FLAG(MF8, NOBLOCKSKULLFLY, AActor, flags8),//[GEC]
+
 	// Effect flags
 	DEFINE_FLAG(FX, VISIBILITYPULSE, AActor, effects),
 	DEFINE_FLAG2(FX_ROCKET, ROCKETTRAIL, AActor, effects),
@@ -330,6 +342,7 @@ static FFlagDef InventoryFlagDefs[] =
 	DEFINE_FLAG(IF, ALWAYSRESPAWN, AInventory, ItemFlags),
 	DEFINE_FLAG(IF, TRANSFER, AInventory, ItemFlags),
 	DEFINE_FLAG(IF, NOTELEPORTFREEZE, AInventory, ItemFlags),
+	DEFINE_FLAG(IF, CLASSICFLASH, AInventory, ItemFlags), // [GEC] Set original aumento de flash pickup
 
 	DEFINE_DEPRECATED_FLAG(PICKUPFLASH),
 	DEFINE_DEPRECATED_FLAG(INTERHUBSTRIP),
@@ -360,6 +373,11 @@ static FFlagDef WeaponFlagDefs[] =
 	DEFINE_DUMMY_FLAG(NOLMS),
 	DEFINE_FLAG(WIF, ALT_USES_BOTH, AWeapon, WeaponFlags),
 	DEFINE_DUMMY_FLAG(ALLOW_WITH_RESPAWN_INVUL),
+
+	DEFINE_FLAG(WIF_GEC, CONSOLEBOBBING, AWeapon, WeaponFlags),		// [GEC] console bobbing style
+	DEFINE_FLAG(WIF_GEC, NORAMPAGE, AWeapon, WeaponFlags),			// [GEC] No Rampage In Weapon
+	DEFINE_FLAG(WIF_GEC, BRIGHTWITHCOLOR, AWeapon, WeaponFlags),	// [GEC] Set Color in Bright State
+	DEFINE_FLAG(WIF_GEC, FORCEOLDBOBBING, AWeapon, WeaponFlags),	// [GEC] Force Old System Bobbing
 };
 
 static FFlagDef PlayerPawnFlagDefs[] =
@@ -368,6 +386,9 @@ static FFlagDef PlayerPawnFlagDefs[] =
 	DEFINE_FLAG(PPF, NOTHRUSTWHENINVUL, APlayerPawn, PlayerFlags),
 	DEFINE_FLAG(PPF, CANSUPERMORPH, APlayerPawn, PlayerFlags),
 	DEFINE_FLAG(PPF, CROUCHABLEMORPH, APlayerPawn, PlayerFlags),
+	DEFINE_FLAG(PPF, MOVEONLYONGROUND, APlayerPawn, PlayerFlags),		// [GEC] Move Only onground
+	DEFINE_FLAG(PPF, PAINFACEONSECTORDAMAGE, APlayerPawn, PlayerFlags),	// [GEC] Psx draw pain face on sector damage 
+	DEFINE_FLAG(PPF, AUTOTELEFRAG, APlayerPawn, PlayerFlags),			// [GEC] Psx & D64 PlayerAutoTeleFrag
 };
 
 static FFlagDef PowerSpeedFlagDefs[] =

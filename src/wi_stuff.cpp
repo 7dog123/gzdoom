@@ -273,6 +273,174 @@ static FString			lnametexts[2];
 static FTexture			*background;
 
 //
+// [GEC] CODE
+//
+static int ordercount;//[GEC]
+static int cnt_pause_custom = TICRATE;//[GEC]
+
+typedef enum
+{
+	Stop = -1,
+	Kills,
+	Items,
+	Secret,
+	Time,
+	Entering,
+	Skip,
+	//
+	TotalTime = 4,
+	ParTime = 5,
+	Suck = 6,
+} Showenum_t;
+
+//static int order[6] = {Kills, Items, Secret, Stop, Stop, Stop};//{Kills, Items, Secret, Time, Entering, Stop};
+static int order[6] = {Stop, Stop, Stop, Stop, Stop, Stop};
+static bool WaitStat, CountWait;
+
+static bool DrawKills = true;
+static bool DrawItems = true;
+static bool DrawSecret = true;
+static bool DrawTime = true;
+static bool DrawEntering = true;
+
+static bool ShowKills = false;
+static bool ShowItems = false;
+static bool ShowSecret = false;
+static bool ShowTime = false;
+static bool ShowEntering = false;
+
+static bool CounterKills = true;
+static bool CounterItems = true;
+static bool CounterSecret = true;
+static bool CounterTime = true;
+
+static bool CustomStat = false;
+
+static FFont * FontName;
+static FFont * FontInter;
+
+enum StringAlignment //[GEC]
+{
+	ALIGN_NONE,
+	ALIGN_RIGHT,
+	ALIGN_LEFT,
+	ALIGN_CENTER,
+};
+
+struct StatDef
+{
+	int ResW, ResH;
+	FName	FontName;//FontName
+	FName	FontInter;//FontInter
+	EColorRange FontNameColor;
+	EColorRange FontInterColor;
+
+	//Finished
+	FString		FiniShedPic;
+	FString		FiniShedText;
+	int			FiniShedYPos;
+	int			FiniShedYPos2;
+
+	//Entering
+	FString		EnteringPic;
+	FString		EnteringText;
+	int			EnteringYPos;
+	int			EnteringYPos2;
+	bool		ShowEntering;
+
+	//Kill, Item, Secret, Time, TotalTime, ParTime
+	struct StatLayer
+	{
+		FString		Pic;
+		FString		Text;
+		int PosX, PosY;
+		int Pos2X, Pos2Y;
+		int RowPaddingPercent;
+		int Alignment;
+		bool ShowPercent;
+		int Delay;
+
+		bool NoSound;
+		bool Show;
+		bool Draw;
+	} Layer[8];
+
+	void SetDefaultStat()
+	{
+		this->FontNameColor = CR_UNTRANSLATED;
+		this->FontInterColor = CR_UNTRANSLATED;
+		this->FontName = "BigFont";
+		this->FontInter = "BigFont";
+		this->ResW = 320;
+		this->ResH = 240;
+		this->FiniShedPic = NULL;
+		this->FiniShedText = NULL;
+		this->FiniShedYPos = 0;
+		this->FiniShedYPos2 = 0;
+
+		this->EnteringPic = NULL;
+		this->EnteringText = NULL;
+		this->EnteringYPos = 0;
+		this->EnteringYPos2 = 0;
+		this->ShowEntering = false;
+
+		for(int i = 0; i < 8; i++)
+		{
+			this->Layer[i].Pic = NULL;
+			this->Layer[i].Text = NULL;
+			this->Layer[i].PosX = 0;
+			this->Layer[i].PosY = 0;
+			this->Layer[i].Pos2X = 0;
+			this->Layer[i].Pos2Y = 0;
+			this->Layer[i].RowPaddingPercent = 0;
+			this->Layer[i].Alignment = ALIGN_NONE;
+			this->Layer[i].ShowPercent = false;
+			this->Layer[i].Delay = TICRATE;
+
+			this->Layer[i].Show = false;
+			this->Layer[i].Draw = false;
+			this->Layer[i].NoSound = false;
+		}
+	}
+}Stats;
+
+void WI_DrawTexOrPic (FFont *Font, int X, int Y, bool ceneter, FTexture *tex, const char *name, EColorRange color=CR_UNTRANSLATED)//[GEC]
+{
+	int W;
+
+	if (tex)
+	{
+		W = tex->GetScaledWidth();
+		if(ceneter) X = (Stats.ResW - W)/2;
+
+		double rx = X;
+		double ry = Y;
+		double rw = tex->GetScaledWidthDouble();
+		double rh = tex->GetScaledHeightDouble();
+
+		screen->VirtualToRealCoords(rx, ry, rw, rh, Stats.ResW, Stats.ResH, true);
+
+		screen->DrawTexture(tex, rx, ry,
+				DTA_DestWidthF, rw,
+				DTA_DestHeightF, rh,
+				TAG_DONE);
+	}
+	else if (name)
+	{
+		if (*name == '$') name = GStrings(name+1);
+
+		W = Font->StringWidth (name);
+		if(ceneter) X = (Stats.ResW - W)/2;
+
+		screen->DrawText (Font, color,
+		X,Y, name, DTA_ResWidthF, Stats.ResW, DTA_ResHeightF, Stats.ResH, TAG_DONE);
+	}
+}
+
+//static StatDef *Stats;
+// = new FPageDef;
+
+//
 // CODE
 //
 
@@ -720,11 +888,33 @@ void WI_drawBackground()
 static int WI_DrawCharPatch (FFont *font, int charcode, int x, int y, EColorRange translation=CR_UNTRANSLATED, bool nomove=false)
 {
 	int width;
-	screen->DrawTexture(font->GetChar(charcode, &width), x, y,
-		nomove ? DTA_CleanNoMove : DTA_Clean, true,
-		DTA_ShadowAlpha, (gameinfo.gametype & GAME_DoomChex) ? 0 : FRACUNIT/2,
-		DTA_Translation, font->GetColorTranslation(translation),
-		TAG_DONE);
+
+	if(CustomStat)//[GEC]
+	{
+		FTexture *tex = font->GetChar(charcode, &width);
+
+		double rx = x;
+		double ry = y;
+		double rw = tex->GetScaledWidthDouble();
+		double rh = tex->GetScaledHeightDouble();
+
+		screen->VirtualToRealCoords(rx, ry, rw, rh, Stats.ResW, Stats.ResH, true);
+
+		screen->DrawTexture(tex, rx, ry,
+				DTA_DestWidthF, rw,
+				DTA_DestHeightF, rh,
+				DTA_ShadowAlpha, (gameinfo.gametype & GAME_DoomChex) ? 0 : FRACUNIT/2,
+				DTA_Translation, font->GetColorTranslation(translation),
+				TAG_DONE);
+	}
+	else
+	{
+		screen->DrawTexture(font->GetChar(charcode, &width), x, y,
+			nomove ? DTA_CleanNoMove : DTA_Clean, true,
+			DTA_ShadowAlpha, (gameinfo.gametype & GAME_DoomChex) ? 0 : FRACUNIT/2,
+			DTA_Translation, font->GetColorTranslation(translation),
+			TAG_DONE);
+	}
 	return x - width;
 }
 
@@ -950,7 +1140,7 @@ void WI_drawOnLnode( int   n, FTexture * c[] ,int numc)
 // Returns new x position, that is, the left edge of the number.
 //
 //====================================================================
-int WI_drawNum (FFont *font, int x, int y, int n, int digits, bool leadingzeros=true, EColorRange translation=CR_UNTRANSLATED)
+int WI_drawNum (FFont *font, int x, int y, int n, int digits, bool leadingzeros=true, EColorRange translation=CR_UNTRANSLATED, int Alignment = ALIGN_NONE)//[GEC]
 {
 	int fontwidth = font->GetCharWidth('3');
 	char text[8];
@@ -960,7 +1150,8 @@ int WI_drawNum (FFont *font, int x, int y, int n, int digits, bool leadingzeros=
 
 	if (nomove)
 	{
-		fontwidth *= CleanXfac;
+		if(!CustomStat)//[GEC]
+			fontwidth *= CleanXfac;
 	}
 	if (leadingzeros)
 	{
@@ -972,19 +1163,51 @@ int WI_drawNum (FFont *font, int x, int y, int n, int digits, bool leadingzeros=
 	}
 	text_p = text + MIN<int>(len, countof(text)-1);
 
-	while (--text_p >= text)
+	if(Alignment != ALIGN_NONE)
 	{
-		// Digits are centered in a box the width of the '3' character.
-		// Other characters (specifically, '-') are right-aligned in their cell.
-		if (*text_p >= '0' && *text_p <= '9')
+		if(Alignment == ALIGN_RIGHT)
+			x -= font->StringWidth(text);
+		else if(Alignment == ALIGN_CENTER)
+			x -= (font->StringWidth(text) + len) / 2;
+
+		if (nomove)
 		{
-			x -= fontwidth;
-			WI_DrawCharPatch(font, *text_p, x + (fontwidth - font->GetCharWidth(*text_p)) / 2, y, translation, nomove);
+			if(!CustomStat)//[GEC]
+				x *= CleanXfac;
+		}
+
+		if(CustomStat)//[GEC]
+		{
+			screen->DrawText(font, translation, x, y, text, 
+				DTA_ShadowAlpha, (gameinfo.gametype & GAME_DoomChex) ? 0 : FRACUNIT/2,
+				DTA_ResWidthF, Stats.ResW, 
+				DTA_ResHeightF, Stats.ResH, 
+				TAG_DONE);
 		}
 		else
 		{
-			WI_DrawCharPatch(font, *text_p, x - font->GetCharWidth(*text_p), y, translation, nomove);
-			x -= fontwidth;
+			screen->DrawText(font, translation, x, y, text, 
+				nomove ? DTA_CleanNoMove : DTA_Clean, true,
+				DTA_ShadowAlpha, (gameinfo.gametype & GAME_DoomChex) ? 0 : FRACUNIT/2,
+				TAG_DONE);
+		}
+	}
+	else
+	{
+		while (--text_p >= text)
+		{
+			// Digits are centered in a box the width of the '3' character.
+			// Other characters (specifically, '-') are right-aligned in their cell.
+			if (*text_p >= '0' && *text_p <= '9')
+			{
+				x -= fontwidth;
+				WI_DrawCharPatch(font, *text_p, x + (fontwidth - font->GetCharWidth(*text_p)) / 2, y, translation, nomove);
+			}
+			else
+			{
+				WI_DrawCharPatch(font, *text_p, x - font->GetCharWidth(*text_p), y, translation, nomove);
+				x -= fontwidth;
+			}
 		}
 	}
 	if (len < digits)
@@ -1000,27 +1223,60 @@ int WI_drawNum (FFont *font, int x, int y, int n, int digits, bool leadingzeros=
 //
 //====================================================================
 
-void WI_drawPercent (FFont *font, int x, int y, int p, int b, bool show_total=true, EColorRange color=CR_UNTRANSLATED)
+void WI_drawPercent (FFont *font, int x, int y, int p, int b, bool show_total=true, EColorRange color=CR_UNTRANSLATED, int RowPaddingPercent = 2, int Alignment = ALIGN_NONE, bool showPercent = false)//[GEC]
 {
-	if (p < 0)
-		return;
-
-	if (wi_percents)
+	if (wi_percents)//GEC
 	{
 		if (font != IntermissionFont)
 		{
-			x -= font->GetCharWidth('%') * CleanXfac;
+			if(CustomStat)//[GEC]
+				x -= font->GetCharWidth('%');
+			else
+				x -= font->GetCharWidth('%') * CleanXfac;
 		}
 		else
 		{
 			x -= font->GetCharWidth('%');
 		}
-		screen->DrawText(font, color, x, y, "%", font != IntermissionFont ? DTA_CleanNoMove : DTA_Clean, true, TAG_DONE);
+
+		if(showPercent)
+		{
+			if(CustomStat)//[GEC]
+				screen->DrawText(font, color, x, y, "%", DTA_ResWidthF, Stats.ResW, DTA_ResHeightF, Stats.ResH, TAG_DONE);
+			else
+				screen->DrawText(font, color, x, y, "%", font != IntermissionFont ? DTA_CleanNoMove : DTA_Clean, true, TAG_DONE);
+		}
+	}
+
+	if (p < 0)
+		return;
+
+	if (wi_percents)
+	{
+		/*if (font != IntermissionFont)
+		{
+			if(CustomStat)//[GEC]
+				x -= font->GetCharWidth('%');
+			else
+				x -= font->GetCharWidth('%') * CleanXfac;
+		}
+		else
+		{
+			x -= font->GetCharWidth('%');
+		}*/
+
+		if(CustomStat)//[GEC]
+			screen->DrawText(font, color, x, y, "%", DTA_ResWidthF, Stats.ResW, DTA_ResHeightF, Stats.ResH, TAG_DONE);
+		else
+			screen->DrawText(font, color, x, y, "%", font != IntermissionFont ? DTA_CleanNoMove : DTA_Clean, true, TAG_DONE);
 		if (font != IntermissionFont)
 		{
-			x -= 2*CleanXfac;
+			if(CustomStat)//[GEC]
+				x -= RowPaddingPercent;
+			else 
+				x -= 2*CleanXfac;
 		}
-		WI_drawNum(font, x, y, b == 0 ? 100 : p * 100 / b, -1, false, color);
+		WI_drawNum(font, x, y, b == 0 ? 100 : p * 100 / b, -1, false, color, Alignment);//[GEC]
 	}
 	else
 	{
@@ -1031,7 +1287,7 @@ void WI_drawPercent (FFont *font, int x, int y, int p, int b, bool show_total=tr
 			screen->DrawText (IntermissionFont, color, x, y, "/",
 				DTA_Clean, true, TAG_DONE);
 		}
-		WI_drawNum (font, x, y, p, -1, false, color);
+		WI_drawNum (font, x, y, p, -1, false, color, Alignment);//[GEC]
 	}
 }
 
@@ -1040,7 +1296,7 @@ void WI_drawPercent (FFont *font, int x, int y, int p, int b, bool show_total=tr
 // Display level completion time and par, or "sucks" message if overflow.
 //
 //====================================================================
-void WI_drawTime (int x, int y, int t, bool no_sucks=false)
+void WI_drawTime (int x, int y, int t, bool no_sucks=false, FFont *newfont = NULL, EColorRange color = CR_UNTRANSLATED)//[GEC]
 {
 	bool sucky;
 
@@ -1051,15 +1307,29 @@ void WI_drawTime (int x, int y, int t, bool no_sucks=false)
 
 	if (sucky)
 	{ // "sucks"
-		if (sucks != NULL)
+		if(CustomStat)//[GEC]
 		{
-			screen->DrawTexture (sucks, x - sucks->GetScaledWidth(), y - IntermissionFont->GetHeight() - 2,
-				DTA_Clean, true, TAG_DONE); 
+			FFont *Font = BigFont;
+
+			if(newfont != NULL)
+			Font = newfont;
+
+			FTexture *tex = NULL;
+			if(Stats.Layer[Suck].Pic.IsNotEmpty()) tex = TexMan(Stats.Layer[Suck].Pic);
+			WI_DrawTexOrPic (Font, Stats.Layer[Suck].PosX, Stats.Layer[Suck].PosY, false, tex, Stats.Layer[Suck].Text.GetChars(), color);
 		}
 		else
 		{
-			screen->DrawText (BigFont, CR_UNTRANSLATED, x  - BigFont->StringWidth("SUCKS"), y - IntermissionFont->GetHeight() - 2,
-				"SUCKS", DTA_Clean, true, TAG_DONE);
+			if (sucks != NULL)
+			{
+				screen->DrawTexture (sucks, x - sucks->GetScaledWidth(), y - IntermissionFont->GetHeight() - 2,
+					DTA_Clean, true, TAG_DONE); 
+			}
+			else
+			{
+				screen->DrawText (BigFont, color, x  - BigFont->StringWidth("SUCKS"), y - IntermissionFont->GetHeight() - 2,
+					"SUCKS", DTA_Clean, true, TAG_DONE);
+			}
 		}
 	}
 
@@ -1069,23 +1339,36 @@ void WI_drawTime (int x, int y, int t, bool no_sucks=false)
 	t -= minutes * 60;
 	int seconds = t;
 
+	FFont *Font = IntermissionFont;
+
+	if(newfont != NULL)
+		Font = newfont;
+
 	// Why were these offsets hard coded? Half the WADs with custom patches
 	// I tested screwed up miserably in this function!
-	int num_spacing = IntermissionFont->GetCharWidth('3');
-	int colon_spacing = IntermissionFont->GetCharWidth(':');
+	int num_spacing = Font->GetCharWidth('3');
+	int colon_spacing = Font->GetCharWidth(':');
 
-	x = WI_drawNum (IntermissionFont, x, y, seconds, 2) - 1;
-	WI_DrawCharPatch (IntermissionFont, ':', x -= colon_spacing, y);
-	x = WI_drawNum (IntermissionFont, x, y, minutes, 2, hours!=0);
+	x = WI_drawNum (Font, x, y, seconds, 2,true, color) - 1;//[GEC] add color
+	WI_DrawCharPatch (Font, ':', x -= colon_spacing, y, color);//[GEC] add color
+	x = WI_drawNum (Font, x, y, minutes, 2, hours!=0, color);//[GEC] add color
 	if (hours)
 	{
-		WI_DrawCharPatch (IntermissionFont, ':', x -= colon_spacing, y);
-		WI_drawNum (IntermissionFont, x, y, hours, 2);
+		WI_DrawCharPatch (Font, ':', x -= colon_spacing, y, color);//[GEC] add color
+		WI_drawNum (Font, x, y, hours, 2,true, color);//[GEC] add color
 	}
 }
 
 void WI_End ()
 {
+	if(CustomStat)//[GEC]
+	{
+		//if(gameinfo.mMapWipe != GS_DEMOSCREEN)//[GEC]
+			//wipegamestate = gameinfo.mMapWipe;
+		//if(gameinfo.mStartWipe != GS_DEMOSCREEN)//[GEC]
+			//wipegamestate = gameinfo.mStartWipe;
+	}
+
 	state = LeavingIntermission;
 	WI_unloadData ();
 
@@ -1153,7 +1436,24 @@ void WI_initShowNextLoc ()
 		return;
 	}
 
-	state = ShowNextLoc;
+	if(CustomStat)//[GEC]
+	{
+		if(!ShowEntering)//[GEC]
+		{
+			state = ShowNextLoc;
+		}
+		else
+		{
+			WI_End();
+			G_WorldDone();
+			return;
+		}
+	}
+	else
+	{
+		state = ShowNextLoc;
+	}
+
 	acceleratestage = 0;
 	cnt = SHOWNEXTLOCDELAY * TICRATE;
 	WI_LoadBackground(true);
@@ -1193,7 +1493,14 @@ void WI_drawShowNextLoc(void)
 	}
 
 	// draws which level you are entering..
-	WI_drawEL ();  
+	if(CustomStat)//[GEC]
+	{
+		FTexture *tex = NULL;
+		if(Stats.EnteringPic.IsNotEmpty()) tex = TexMan(Stats.EnteringPic);
+		WI_DrawTexOrPic (FontName, 0, Stats.EnteringYPos, true, tex, Stats.EnteringText.GetChars(), Stats.FontNameColor);
+		WI_DrawTexOrPic (FontName, 0, Stats.EnteringYPos2, true, wbs->LName1, lnametexts[1].GetChars(), Stats.FontNameColor);
+	}
+	else WI_drawEL ();  
 
 }
 
@@ -1794,7 +2101,6 @@ void WI_drawNetgameStats ()
 }
 
 static int  sp_state;
-
 void WI_initStats ()
 {
 	state = StatCount;
@@ -1805,7 +2111,14 @@ void WI_initStats ()
 	cnt_pause = TICRATE;
 	
 	cnt_total_time = -1;
+
+	//CountWait = true;//[GEC]
+	//WaitStat = true;//[GEC]
+	//init custom
+	ordercount = 0;//[GEC]
+	ShowEntering = Stats.ShowEntering;
 }
+
 
 void WI_updateStats ()
 {
@@ -1823,106 +2136,404 @@ void WI_updateStats ()
 		cnt_time = Tics2Seconds(plrs[me].stime);
 		cnt_par = wbs->partime / TICRATE;
 		cnt_total_time = Tics2Seconds(wbs->totaltime);
+
+		ordercount = 5;//[GEC]
+
+		ShowKills = true;
+		ShowItems = true;
+		ShowSecret = true;
+		ShowTime = true;
+
+		if (strncmp (wminfo.next, "enDSeQ", 6))
+		{
+		    ShowEntering = true;
+		}
 	}
 
-	if (sp_state == 2)
-	{
-		if (gameinfo.intermissioncounter)
-		{
-			cnt_kills[0] += 2;
+	int setorder = order[ordercount];//[GEC]
 
-			if (!(bcnt&3))
-				S_Sound (CHAN_VOICE | CHAN_UI, "intermission/tick", 1, ATTN_NONE);
-		}
-		if (!gameinfo.intermissioncounter || cnt_kills[0] >= plrs[me].skills)
+	if(CustomStat)//[GEC]
+	{
+		if(!DrawKills)
 		{
 			cnt_kills[0] = plrs[me].skills;
-			S_Sound (CHAN_VOICE | CHAN_UI, "intermission/nextstage", 1, ATTN_NONE);
-			sp_state++;
 		}
-	}
-	else if (sp_state == 4)
-	{
-		if (gameinfo.intermissioncounter)
-		{
-			cnt_items[0] += 2;
-
-			if (!(bcnt&3))
-				S_Sound (CHAN_VOICE | CHAN_UI, "intermission/tick", 1, ATTN_NONE);
-		}
-		if (!gameinfo.intermissioncounter || cnt_items[0] >= plrs[me].sitems)
+		if(!DrawItems)
 		{
 			cnt_items[0] = plrs[me].sitems;
-			S_Sound (CHAN_VOICE | CHAN_UI, "intermission/nextstage", 1, ATTN_NONE);
-			sp_state++;
 		}
-	}
-	else if (sp_state == 6)
-	{
-		if (gameinfo.intermissioncounter)
-		{
-			cnt_secret[0] += 2;
-
-			if (!(bcnt&3))
-				S_Sound (CHAN_VOICE | CHAN_UI, "intermission/tick", 1, ATTN_NONE);
-		}
-		if (!gameinfo.intermissioncounter || cnt_secret[0] >= plrs[me].ssecret)
+		if(!DrawSecret)
 		{
 			cnt_secret[0] = plrs[me].ssecret;
-			S_Sound (CHAN_VOICE | CHAN_UI, "intermission/nextstage", 1, ATTN_NONE);
-			sp_state++;
 		}
-	}
-	else if (sp_state == 8)
-	{
-		if (gameinfo.intermissioncounter)
+		if(!DrawTime)
 		{
-			if (!(bcnt&3))
-				S_Sound (CHAN_VOICE | CHAN_UI, "intermission/tick", 1, ATTN_NONE);
-
-			cnt_time += 3;
-			cnt_par += 3;
-			cnt_total_time += 3;
-		}
-
-		int sec = Tics2Seconds(plrs[me].stime);
-		if (!gameinfo.intermissioncounter || cnt_time >= sec)
-			cnt_time = sec;
-
-		int tsec = Tics2Seconds(wbs->totaltime);
-		if (!gameinfo.intermissioncounter || cnt_total_time >= tsec)
-			cnt_total_time = tsec;
-
-		if (!gameinfo.intermissioncounter || cnt_par >= wbs->partime / TICRATE)
-		{
+			cnt_time = Tics2Seconds(plrs[me].stime);
 			cnt_par = wbs->partime / TICRATE;
+			cnt_total_time = Tics2Seconds(wbs->totaltime);
+		}
 
-			if (cnt_time >= sec)
+		if (CountWait && cnt_pause != 0)
+		{
+			//if (!--cnt_pause)
+			if(cnt_pause == 0)
 			{
-				cnt_total_time = tsec;
+				CountWait = false;
+
+				if(!CustomStat)//[GEC]
+					cnt_pause = TICRATE;
+			}
+			else
+				cnt_pause--;
+		}
+		else
+		{
+			//Printf("ordercount %d setorder %d\n",ordercount,setorder);
+			switch (setorder)
+			{
+				case Skip:
+				{
+					ordercount++;
+					break;
+				}
+				case Stop:
+				{
+					ordercount = 5;//[GEC]
+					sp_state = 10;
+					if (acceleratestage)
+					{
+						S_Sound (CHAN_VOICE | CHAN_UI, "intermission/paststats", 1, ATTN_NONE);
+						WI_initShowNextLoc();
+					}
+					break;
+				}
+				case Kills:
+				{
+					if(DrawKills)
+					{
+						ShowKills = true;
+						if (CounterKills)//(gameinfo.intermissioncounter)
+						{
+							cnt_kills[0] += 2;
+
+							if (!(bcnt&3) && (WaitStat) && !Stats.Layer[Kills].NoSound)
+								S_Sound (CHAN_VOICE | CHAN_UI, "intermission/tick", 1, ATTN_NONE);
+						}
+						if (!CounterKills/*gameinfo.intermissioncounter*/ || cnt_kills[0] >= plrs[me].skills)
+						{
+							cnt_kills[0] = plrs[me].skills;
+							if(WaitStat)
+							{
+								if(!Stats.Layer[Kills].NoSound)
+									S_Sound (CHAN_VOICE | CHAN_UI, "intermission/nextstage", 1, ATTN_NONE);
+
+								if(order[ordercount+1] != Stop)
+								{
+									CountWait = true;
+									cnt_pause = Stats.Layer[Kills].Delay;
+								}
+								ordercount++;
+							}
+						}
+					}
+					else
+					{
+						cnt_kills[0] = plrs[me].skills;
+						if(WaitStat) ordercount++;
+					}
+					if(WaitStat)break;
+				}
+
+				case Items:
+				{
+					if(DrawItems)
+					{
+						ShowItems = true;
+						if (CounterItems)
+						{
+							cnt_items[0] += 2;
+
+							if (!(bcnt&3) && (WaitStat) && !Stats.Layer[Items].NoSound)
+								S_Sound (CHAN_VOICE | CHAN_UI, "intermission/tick", 1, ATTN_NONE);
+						}
+						if (!CounterItems || cnt_items[0] >= plrs[me].sitems)
+						{
+							cnt_items[0] = plrs[me].sitems;
+							if(WaitStat)
+							{
+								if(!Stats.Layer[Items].NoSound)
+									S_Sound (CHAN_VOICE | CHAN_UI, "intermission/nextstage", 1, ATTN_NONE);
+
+								if(order[ordercount+1] != Stop)
+								{
+									CountWait = true;
+									cnt_pause = Stats.Layer[Items].Delay;
+								}
+								ordercount++;
+							}
+						}
+					}
+					else
+					{
+						cnt_items[0] = plrs[me].sitems;
+						if(WaitStat) ordercount++;
+					}
+					if(WaitStat)break;
+				}
+
+				case Secret:
+				{
+					if(DrawSecret)
+					{
+						ShowSecret = true;
+						if (CounterSecret)
+						{
+							cnt_secret[0] += 2;
+
+							if (!(bcnt&3) && (WaitStat) && !Stats.Layer[Secret].NoSound)
+								S_Sound (CHAN_VOICE | CHAN_UI, "intermission/tick", 1, ATTN_NONE);
+						}
+						if (!CounterSecret || cnt_secret[0] >= plrs[me].ssecret)
+						{
+							cnt_secret[0] = plrs[me].ssecret;
+							if(WaitStat)
+							{
+								if(!Stats.Layer[Secret].NoSound)
+									S_Sound (CHAN_VOICE | CHAN_UI, "intermission/nextstage", 1, ATTN_NONE);
+
+								if(order[ordercount+1] != Stop)
+								{
+									CountWait = true;
+									cnt_pause = Stats.Layer[Secret].Delay;
+								}
+								ordercount++;
+							}
+						}
+						
+					}
+					else
+					{
+						cnt_secret[0] = plrs[me].ssecret;
+						if(WaitStat) ordercount++;
+					}
+					if(WaitStat)break;
+				}
+
+				case Time:
+				{
+					if(DrawTime)
+					{
+						ShowTime = true;
+						if (CounterTime)
+						{
+							if (!(bcnt&3) && (WaitStat) && !Stats.Layer[Time].NoSound)
+								S_Sound (CHAN_VOICE | CHAN_UI, "intermission/tick", 1, ATTN_NONE);
+
+							cnt_time += 3;
+							cnt_par += 3;
+							cnt_total_time += 3;
+						}
+
+						int sec = Tics2Seconds(plrs[me].stime);
+						if (!CounterTime || cnt_time >= sec)
+							cnt_time = sec;
+
+						int tsec = Tics2Seconds(wbs->totaltime);
+						if (!CounterTime || cnt_total_time >= tsec)
+							cnt_total_time = tsec;
+
+						if (!CounterTime || cnt_par >= wbs->partime / TICRATE)
+						{
+							cnt_par = wbs->partime / TICRATE;
+
+							if (cnt_time >= sec)
+							{
+								cnt_total_time = tsec;
+								if(WaitStat)
+								{
+									if(!Stats.Layer[Time].NoSound)
+										S_Sound (CHAN_VOICE | CHAN_UI, "intermission/nextstage", 1, ATTN_NONE);
+
+									if(order[ordercount+1] != Stop)
+									{
+										CountWait = true;
+										cnt_pause = Stats.Layer[Time].Delay;
+									}
+									ordercount++;
+								}
+							}
+						}
+					}
+					else
+					{
+						cnt_time = Tics2Seconds(plrs[me].stime);
+						cnt_par = wbs->partime / TICRATE;
+						cnt_total_time = Tics2Seconds(wbs->totaltime);
+						if(WaitStat) ordercount++;
+					}
+					if(WaitStat)break;
+				}
+
+				case Entering:
+				{
+					if (strncmp (wminfo.next, "enDSeQ", 6) == 0)
+					{
+					    DrawEntering = false;
+					}
+
+					if(DrawEntering)
+					{
+						ShowEntering = true;
+
+						if(WaitStat)
+						{
+							S_Sound (CHAN_VOICE | CHAN_UI, "intermission/nextstage", 1, ATTN_NONE);
+							if(order[ordercount+1] != Stop)
+							{
+								CountWait = true;
+								cnt_pause = 0;
+							}
+							ordercount++;
+						}
+					}
+					else
+					{
+						if(WaitStat) ordercount++;
+					}
+					if(WaitStat)break;
+				}
+			}
+
+			if(setorder != Stop)
+			{
+				if(!WaitStat)
+				{
+					if((cnt_kills[0] == plrs[me].skills) && 
+					(cnt_items[0] == plrs[me].sitems) && 
+					(cnt_secret[0] == plrs[me].ssecret) &&
+					(cnt_time == Tics2Seconds(plrs[me].stime)) && 
+					(cnt_par == wbs->partime / TICRATE) && 
+					(cnt_total_time == Tics2Seconds(wbs->totaltime)))
+					{
+						S_Sound (CHAN_VOICE | CHAN_UI, "intermission/nextstage", 1, ATTN_NONE);
+						ordercount = 5;
+					}
+
+					if((cnt_kills[0] != plrs[me].skills) || 
+					(cnt_items[0] != plrs[me].sitems) || 
+					(cnt_secret[0] != plrs[me].ssecret) ||
+					(cnt_time != Tics2Seconds(plrs[me].stime)) ||
+					(cnt_par != wbs->partime / TICRATE) ||
+					(cnt_total_time != Tics2Seconds(wbs->totaltime)))
+					{
+						if (!(bcnt&3))
+						S_Sound (CHAN_VOICE | CHAN_UI, "intermission/tick", 1, ATTN_NONE);
+					}
+				}
+			}
+		}
+	}//*/
+	else
+	{
+		if (sp_state == 2)
+		{
+			if (gameinfo.intermissioncounter)
+			{
+				cnt_kills[0] += 2;
+
+				if (!(bcnt&3))
+					S_Sound (CHAN_VOICE | CHAN_UI, "intermission/tick", 1, ATTN_NONE);
+			}
+			if (!gameinfo.intermissioncounter || cnt_kills[0] >= plrs[me].skills)
+			{
+				cnt_kills[0] = plrs[me].skills;
 				S_Sound (CHAN_VOICE | CHAN_UI, "intermission/nextstage", 1, ATTN_NONE);
 				sp_state++;
 			}
 		}
-	}
-	else if (sp_state == 10)
-	{
-		if (acceleratestage)
+		else if (sp_state == 4)
 		{
-			S_Sound (CHAN_VOICE | CHAN_UI, "intermission/paststats", 1, ATTN_NONE);
-			WI_initShowNextLoc();
-		}
-	}
-	else if (sp_state & 1)
-	{
-		if (!--cnt_pause)
-		{
-			sp_state++;
-			cnt_pause = TICRATE;
-		}
-	}
-}
+			if (gameinfo.intermissioncounter)
+			{
+				cnt_items[0] += 2;
 
+				if (!(bcnt&3))
+					S_Sound (CHAN_VOICE | CHAN_UI, "intermission/tick", 1, ATTN_NONE);
+			}
+			if (!gameinfo.intermissioncounter || cnt_items[0] >= plrs[me].sitems)
+			{
+				cnt_items[0] = plrs[me].sitems;
+				S_Sound (CHAN_VOICE | CHAN_UI, "intermission/nextstage", 1, ATTN_NONE);
+				sp_state++;
+			}
+		}
+		else if (sp_state == 6)
+		{
+			if (gameinfo.intermissioncounter)
+			{
+				cnt_secret[0] += 2;
+
+				if (!(bcnt&3))
+					S_Sound (CHAN_VOICE | CHAN_UI, "intermission/tick", 1, ATTN_NONE);
+			}
+			if (!gameinfo.intermissioncounter || cnt_secret[0] >= plrs[me].ssecret)
+			{
+				cnt_secret[0] = plrs[me].ssecret;
+				S_Sound (CHAN_VOICE | CHAN_UI, "intermission/nextstage", 1, ATTN_NONE);
+				sp_state++;
+			}
+		}
+		else if (sp_state == 8)
+		{
+			if (gameinfo.intermissioncounter)
+			{
+				if (!(bcnt&3))
+					S_Sound (CHAN_VOICE | CHAN_UI, "intermission/tick", 1, ATTN_NONE);
+
+				cnt_time += 3;
+				cnt_par += 3;
+				cnt_total_time += 3;
+			}
+
+			int sec = Tics2Seconds(plrs[me].stime);
+			if (!gameinfo.intermissioncounter || cnt_time >= sec)
+				cnt_time = sec;
+
+			int tsec = Tics2Seconds(wbs->totaltime);
+			if (!gameinfo.intermissioncounter || cnt_total_time >= tsec)
+				cnt_total_time = tsec;
+
+			if (!gameinfo.intermissioncounter || cnt_par >= wbs->partime / TICRATE)
+			{
+				cnt_par = wbs->partime / TICRATE;
+
+				if (cnt_time >= sec)
+				{
+					cnt_total_time = tsec;
+					S_Sound (CHAN_VOICE | CHAN_UI, "intermission/nextstage", 1, ATTN_NONE);
+					sp_state++;
+				}
+			}
+		}
+		else if (sp_state == 10)
+		{
+			if (acceleratestage)
+			{
+				S_Sound (CHAN_VOICE | CHAN_UI, "intermission/paststats", 1, ATTN_NONE);
+				WI_initShowNextLoc();
+			}
+		}
+		else if (sp_state & 1)
+		{
+			if (!--cnt_pause)
+			{
+				sp_state++;
+				cnt_pause = TICRATE;
+			}
+		}
+	}//*/
+}
+//[GEC]intemission
 void WI_drawStats (void)
 {
 	// line height
@@ -1933,60 +2544,136 @@ void WI_drawStats (void)
 	// draw animated background
 	WI_drawBackground(); 
 	
-	WI_drawLF();
-	
-	if (gameinfo.gametype & GAME_DoomChex)
+	if(CustomStat)//[GEC]
 	{
-		screen->DrawTexture (kills, SP_STATSX, SP_STATSY, DTA_Clean, true, TAG_DONE);
-		WI_drawPercent (IntermissionFont, 320 - SP_STATSX, SP_STATSY, cnt_kills[0], wbs->maxkills);
+		WI_DrawTexOrPic (FontName, 0, Stats.FiniShedYPos, true, wbs->LName0, lnametexts[0].GetChars(), Stats.FontNameColor);
+		FTexture *tex = NULL;
+		if(Stats.FiniShedPic.IsNotEmpty()) tex = TexMan(Stats.FiniShedPic);
+		WI_DrawTexOrPic (FontName, 0, Stats.FiniShedYPos2, true, tex, Stats.FiniShedText.GetChars(), Stats.FontNameColor);
+	}
+	else WI_drawLF();
 
-		screen->DrawTexture (items, SP_STATSX, SP_STATSY+lh, DTA_Clean, true, TAG_DONE);
-		WI_drawPercent (IntermissionFont, 320 - SP_STATSX, SP_STATSY+lh, cnt_items[0], wbs->maxitems);
-
-		screen->DrawTexture (sp_secret, SP_STATSX, SP_STATSY+2*lh, DTA_Clean, true, TAG_DONE);
-		WI_drawPercent (IntermissionFont, 320 - SP_STATSX, SP_STATSY+2*lh, cnt_secret[0], wbs->maxsecret);
-
-		screen->DrawTexture (timepic, SP_TIMEX, SP_TIMEY, DTA_Clean, true, TAG_DONE);
-		WI_drawTime (160 - SP_TIMEX, SP_TIMEY, cnt_time);
-		if (wi_showtotaltime)
+	if(CustomStat)
+	{
+		if(ShowKills)
 		{
-			WI_drawTime (160 - SP_TIMEX, SP_TIMEY + lh, cnt_total_time, true);	// no 'sucks' for total time ever!
+			FTexture *tex = NULL;
+			if(Stats.Layer[Kills].Pic.IsNotEmpty()) tex = TexMan(Stats.Layer[Kills].Pic);
+			WI_DrawTexOrPic (FontInter, Stats.Layer[Kills].PosX, Stats.Layer[Kills].PosY, false, tex, Stats.Layer[Kills].Text.GetChars(), Stats.FontInterColor);
+			WI_drawPercent (FontInter, Stats.Layer[Kills].Pos2X, Stats.Layer[Kills].Pos2Y, cnt_kills[0], wbs->maxkills, true, 
+			Stats.FontInterColor, Stats.Layer[Kills].RowPaddingPercent, Stats.Layer[Kills].Alignment, Stats.Layer[Kills].ShowPercent);
 		}
 
-		if (wbs->partime)
+		if(ShowItems)
 		{
-			screen->DrawTexture (par, 160 + SP_TIMEX, SP_TIMEY, DTA_Clean, true, TAG_DONE);
-			WI_drawTime (320 - SP_TIMEX, SP_TIMEY, cnt_par);
+			FTexture *tex = NULL;
+			if(Stats.Layer[Items].Pic.IsNotEmpty()) tex = TexMan(Stats.Layer[Items].Pic);
+			WI_DrawTexOrPic (FontInter, Stats.Layer[Items].PosX, Stats.Layer[Items].PosY, false, tex, Stats.Layer[Items].Text.GetChars(), Stats.FontInterColor);
+			WI_drawPercent (FontInter, Stats.Layer[Items].Pos2X, Stats.Layer[Items].Pos2Y, cnt_items[0], wbs->maxitems, true, 
+			Stats.FontInterColor, Stats.Layer[Items].RowPaddingPercent, Stats.Layer[Items].Alignment, Stats.Layer[Items].ShowPercent);
 		}
 
+		if(ShowSecret)
+		{
+			FTexture *tex = NULL;
+			if(Stats.Layer[Secret].Pic.IsNotEmpty()) tex = TexMan(Stats.Layer[Secret].Pic);
+			WI_DrawTexOrPic (FontInter, Stats.Layer[Secret].PosX, Stats.Layer[Secret].PosY, false, tex, Stats.Layer[Secret].Text.GetChars(), Stats.FontInterColor);
+			WI_drawPercent (FontInter, Stats.Layer[Secret].Pos2X, Stats.Layer[Secret].Pos2Y, cnt_secret[0], wbs->maxsecret, true, 
+				Stats.FontInterColor, Stats.Layer[Secret].RowPaddingPercent, Stats.Layer[Secret].Alignment, Stats.Layer[Secret].ShowPercent);
+		}
+
+		if(ShowTime)
+		{
+			FTexture *tex = NULL;
+			if(Stats.Layer[Time].Pic.IsNotEmpty()) tex = TexMan(Stats.Layer[Time].Pic);
+			WI_DrawTexOrPic (FontInter, Stats.Layer[Time].PosX, Stats.Layer[Time].PosY, false, tex, Stats.Layer[Time].Text.GetChars(), Stats.FontInterColor);
+			WI_drawTime (Stats.Layer[Time].Pos2X, Stats.Layer[Time].Pos2Y, cnt_time, false, FontInter, Stats.FontInterColor);
+
+			if (wi_showtotaltime)
+			{
+				if(Stats.Layer[TotalTime].Pic.IsNotEmpty()) tex = TexMan(Stats.Layer[TotalTime].Pic);
+				WI_DrawTexOrPic (FontInter, Stats.Layer[TotalTime].PosX, Stats.Layer[TotalTime].PosY, false, tex, Stats.Layer[TotalTime].Text.GetChars(), Stats.FontInterColor);
+				WI_drawTime (Stats.Layer[TotalTime].Pos2X, Stats.Layer[TotalTime].Pos2Y, cnt_total_time, true, FontInter, Stats.FontInterColor);// no 'sucks' for total time ever!
+			}
+
+			if (wbs->partime)
+			{
+				if(Stats.Layer[ParTime].Pic.IsNotEmpty()) tex = TexMan(Stats.Layer[ParTime].Pic);
+				WI_DrawTexOrPic (FontInter, Stats.Layer[ParTime].PosX, Stats.Layer[ParTime].PosY, false, tex, Stats.Layer[ParTime].Text.GetChars(), Stats.FontInterColor);
+				WI_drawTime (Stats.Layer[ParTime].Pos2X, Stats.Layer[ParTime].Pos2Y, cnt_par, false, FontInter, Stats.FontInterColor);
+			}
+		}
+
+		if (strncmp (wminfo.next, "enDSeQ", 6))
+		{
+			if(ShowEntering)
+			{
+				if(CustomStat)//[GEC]
+				{
+					FTexture *tex = NULL;
+					if(Stats.EnteringPic.IsNotEmpty()) tex = TexMan(Stats.EnteringPic);
+					WI_DrawTexOrPic (FontName, 0, Stats.EnteringYPos, true, tex, Stats.EnteringText.GetChars(), Stats.FontNameColor);
+					WI_DrawTexOrPic (FontName, 0, Stats.EnteringYPos2, true, wbs->LName1, lnametexts[1].GetChars(), Stats.FontNameColor);
+				}
+				else WI_drawEL ();
+			}
+		}
 	}
 	else
 	{
-		screen->DrawText (BigFont, CR_UNTRANSLATED, 50, 65, GStrings("TXT_IMKILLS"), DTA_Clean, true, DTA_Shadow, true, TAG_DONE);
-		screen->DrawText (BigFont, CR_UNTRANSLATED, 50, 90, GStrings("TXT_IMITEMS"), DTA_Clean, true, DTA_Shadow, true, TAG_DONE);
-		screen->DrawText (BigFont, CR_UNTRANSLATED, 50, 115, GStrings("TXT_IMSECRETS"), DTA_Clean, true, DTA_Shadow, true, TAG_DONE);
+		if (gameinfo.gametype & GAME_DoomChex)
+		{
+			screen->DrawTexture (kills, SP_STATSX, SP_STATSY, DTA_Clean, true, TAG_DONE);
+			WI_drawPercent (IntermissionFont, 320 - SP_STATSX, SP_STATSY, cnt_kills[0], wbs->maxkills);
 
-		int countpos = gameinfo.gametype==GAME_Strife? 285:270;
-		if (sp_state >= 2)
-		{
-			WI_drawPercent (IntermissionFont, countpos, 65, cnt_kills[0], wbs->maxkills);
-		}
-		if (sp_state >= 4)
-		{
-			WI_drawPercent (IntermissionFont, countpos, 90, cnt_items[0], wbs->maxitems);
-		}
-		if (sp_state >= 6)
-		{
-			WI_drawPercent (IntermissionFont, countpos, 115, cnt_secret[0], wbs->maxsecret);
-		}
-		if (sp_state >= 8)
-		{
-			screen->DrawText (BigFont, CR_UNTRANSLATED, 85, 160, GStrings("TXT_IMTIME"),
-				DTA_Clean, true, DTA_Shadow, true, TAG_DONE);
-			WI_drawTime (249, 160, cnt_time);
+			screen->DrawTexture (items, SP_STATSX, SP_STATSY+lh, DTA_Clean, true, TAG_DONE);
+			WI_drawPercent (IntermissionFont, 320 - SP_STATSX, SP_STATSY+lh, cnt_items[0], wbs->maxitems);
+
+			screen->DrawTexture (sp_secret, SP_STATSX, SP_STATSY+2*lh, DTA_Clean, true, TAG_DONE);
+			WI_drawPercent (IntermissionFont, 320 - SP_STATSX, SP_STATSY+2*lh, cnt_secret[0], wbs->maxsecret);
+
+			screen->DrawTexture (timepic, SP_TIMEX, SP_TIMEY, DTA_Clean, true, TAG_DONE);
+			WI_drawTime (160 - SP_TIMEX, SP_TIMEY, cnt_time);
 			if (wi_showtotaltime)
 			{
-				WI_drawTime (249, 180, cnt_total_time);
+				WI_drawTime (160 - SP_TIMEX, SP_TIMEY + lh, cnt_total_time, true);	// no 'sucks' for total time ever!
+			}
+
+			if (wbs->partime)
+			{
+				screen->DrawTexture (par, 160 + SP_TIMEX, SP_TIMEY, DTA_Clean, true, TAG_DONE);
+				WI_drawTime (320 - SP_TIMEX, SP_TIMEY, cnt_par);
+			}
+
+		}
+		else
+		{
+			screen->DrawText (BigFont, CR_UNTRANSLATED, 50, 65, GStrings("TXT_IMKILLS"), DTA_Clean, true, DTA_Shadow, true, TAG_DONE);
+			screen->DrawText (BigFont, CR_UNTRANSLATED, 50, 90, GStrings("TXT_IMITEMS"), DTA_Clean, true, DTA_Shadow, true, TAG_DONE);
+			screen->DrawText (BigFont, CR_UNTRANSLATED, 50, 115, GStrings("TXT_IMSECRETS"), DTA_Clean, true, DTA_Shadow, true, TAG_DONE);
+
+			int countpos = gameinfo.gametype==GAME_Strife? 285:270;
+			if (sp_state >= 2)
+			{
+				WI_drawPercent (IntermissionFont, countpos, 65, cnt_kills[0], wbs->maxkills);
+			}
+			if (sp_state >= 4)
+			{
+				WI_drawPercent (IntermissionFont, countpos, 90, cnt_items[0], wbs->maxitems);
+			}
+			if (sp_state >= 6)
+			{
+				WI_drawPercent (IntermissionFont, countpos, 115, cnt_secret[0], wbs->maxsecret);
+			}
+			if (sp_state >= 8)
+			{
+				screen->DrawText (BigFont, CR_UNTRANSLATED, 85, 160, GStrings("TXT_IMTIME"),
+					DTA_Clean, true, DTA_Shadow, true, TAG_DONE);
+				WI_drawTime (249, 160, cnt_time);
+				if (wi_showtotaltime)
+				{
+					WI_drawTime (249, 180, cnt_total_time);
+				}
 			}
 		}
 	}
@@ -2005,6 +2692,8 @@ void WI_checkForAccelerate(void)
 {
 	int i;
 	player_t *player;
+
+	if(!WipeDone) return;//[GEC]
 
 	// check for button presses to skip delays
 	for (i = 0, player = players; i < MAXPLAYERS; i++, player++)
@@ -2181,4 +2870,564 @@ void WI_Start (wbstartstruct_t *wbstartstruct)
 		WI_initStats();
 	S_StopAllChannels ();
 	SN_StopAllSequences ();
+
+	if(CustomStat)
+	{
+		//Set New Font //[GEC]
+		FontName = V_GetFont (Stats.FontName.GetChars());
+		if (FontName == NULL) FontName = BigFont;
+
+		//Set New Font //[GEC]
+		FontInter = V_GetFont (Stats.FontInter.GetChars());
+		if (FontInter == NULL) FontInter = BigFont;
+	}
+}
+
+
+//==========================================================================
+//
+// [GEC] ParseStatScreen
+//
+//==========================================================================
+
+void FMapInfoParser::ParseStatScreen()//[GEC]
+{
+	int OrderCount = 0;
+	Stats.SetDefaultStat();
+	CustomStat = true;
+	DrawKills = false;
+	DrawItems = false;
+	DrawSecret = false;
+	DrawTime = false;
+	DrawEntering = false;
+	ShowKills = false;
+	ShowItems = false;
+	ShowSecret = false;
+	ShowTime = false;
+	ShowEntering = false;
+	WaitStat = true;
+	CountWait = true;
+
+	ParseOpenBrace();
+	while (sc.GetString ())
+	{
+		if (sc.Compare ("Resolution"))
+		{
+			ParseAssign();
+			sc.MustGetNumber ();
+			Stats.ResW = sc.Number;
+			ParseComma();
+			sc.MustGetNumber ();
+			Stats.ResH = sc.Number;
+		}
+		else if (sc.Compare ("WaitCounter"))
+		{
+			ParseAssign();
+			if(sc.CheckToken(TK_False)) 
+				WaitStat = false; 
+			else 
+			{ 
+				sc.MustGetToken(TK_True); 
+				WaitStat = true; 
+			} 
+		}
+		else if (sc.Compare("MapNameFont"))
+		{
+			ParseAssign();
+			sc.MustGetString();
+			Stats.FontName = sc.String;
+			if(sc.CheckToken(',')) //Set Color
+			{
+				sc.MustGetToken(TK_StringConst);
+				Stats.FontNameColor = V_FindFontColor(sc.String);
+			}
+		}
+		else if (sc.Compare("IntermissionFont"))
+		{
+			ParseAssign();
+			sc.MustGetString();
+			Stats.FontInter = sc.String;
+			if(sc.CheckToken(',')) //Set Color
+			{
+				sc.MustGetToken(TK_StringConst);
+				Stats.FontInterColor = V_FindFontColor(sc.String);
+			}
+		}
+		else if (sc.Compare("Finished"))
+		{
+			ParseAssign();
+			sc.MustGetString();
+			if (sc.Compare("pic")){ParseComma(); sc.MustGetString(); Stats.FiniShedPic = sc.String;}
+			else if (sc.Compare("text")){ParseComma(); sc.MustGetString(); Stats.FiniShedText = sc.String;}
+			ParseComma();
+			sc.MustGetNumber ();
+			Stats.FiniShedYPos = sc.Number;
+			ParseComma();
+			sc.MustGetNumber ();
+			Stats.FiniShedYPos2 = sc.Number;
+		}
+		else if (sc.Compare("Entering"))
+		{
+			DrawEntering = true;
+			ShowEntering = true;
+
+			Stats.ShowEntering = ShowEntering;
+
+			ParseAssign();
+			sc.MustGetString();
+			if (sc.Compare("pic")){ParseComma(); sc.MustGetString(); Stats.EnteringPic = sc.String;}
+			else if (sc.Compare("text")){ParseComma(); sc.MustGetString(); Stats.EnteringText = sc.String;}
+			ParseComma();
+			sc.MustGetNumber ();
+			Stats.EnteringYPos = sc.Number;
+			ParseComma();
+			sc.MustGetNumber ();
+			Stats.EnteringYPos2 = sc.Number;
+
+			if(sc.CheckToken(','))
+			{
+				if(sc.CheckToken(TK_False)) 
+				{
+					ShowEntering = false; 
+					Stats.ShowEntering = ShowEntering;
+				}
+				else 
+				{ 
+					sc.MustGetToken(TK_True); 
+					ShowEntering = true; 
+					Stats.ShowEntering = ShowEntering;
+				} 
+			}
+		}
+		else if (sc.Compare("Kill"))
+		{
+			if(!DrawKills)
+			{
+				order[OrderCount] = Kills;//Set order show
+				OrderCount++;
+			}
+
+			ShowKills = true;
+			DrawKills = true;
+
+			ParseAssign();
+			sc.MustGetString();
+			if (sc.Compare("pic")){ParseComma(); sc.MustGetString(); Stats.Layer[Kills].Pic = sc.String;}
+			else if (sc.Compare("text")){ParseComma(); sc.MustGetString(); Stats.Layer[Kills].Text = sc.String;}
+			ParseComma();
+			sc.MustGetNumber ();
+			Stats.Layer[Kills].PosX = sc.Number;
+			ParseComma();
+			sc.MustGetNumber ();
+			Stats.Layer[Kills].PosY = sc.Number;
+			ParseComma();
+			sc.MustGetNumber ();
+			Stats.Layer[Kills].Pos2X = sc.Number;
+			ParseComma();
+			sc.MustGetNumber ();
+			Stats.Layer[Kills].Pos2Y = sc.Number;
+
+			if(sc.CheckToken(','))
+			while(sc.CheckToken(TK_Identifier))
+			{
+				if(sc.Compare("RowPaddingPercent"))
+				{
+					sc.MustGetToken('(');
+					sc.MustGetNumber();
+					Stats.Layer[Kills].RowPaddingPercent = sc.Number;
+					sc.MustGetToken(')');
+				}
+				else if(sc.Compare("Delay"))
+				{
+					sc.MustGetToken('(');
+					sc.MustGetNumber();
+					Stats.Layer[Kills].Delay = sc.Number;
+					sc.MustGetToken(')');
+
+					/*if(OrderCount == 1)
+					{
+						cnt_pause_custom = Stats.Layer[Kills].Delay;
+					}*/
+				}
+				else if(sc.Compare("Alignment"))
+				{
+					sc.MustGetToken('(');
+					sc.MustGetToken(TK_Identifier);
+					if(sc.Compare("right"))
+						Stats.Layer[Kills].Alignment = ALIGN_RIGHT;
+					else if(sc.Compare("left"))
+						Stats.Layer[Kills].Alignment = ALIGN_LEFT;
+					else if(sc.Compare("center"))
+						Stats.Layer[Kills].Alignment = ALIGN_CENTER;
+					else
+						sc.ScriptError("Unknown alignment '%s'.", sc.String);
+					sc.MustGetToken(')');
+				}
+				else if(sc.Compare("NoShow"))
+				{
+					ShowKills = false; 
+				}
+				else if(sc.Compare("NoCounter"))
+				{
+					CounterKills = false; 
+				}
+				else if(sc.Compare("ShowPercent"))
+				{
+					Stats.Layer[Kills].ShowPercent = true; 
+				}
+				else if(sc.Compare("NoSound"))
+				{
+					Stats.Layer[Kills].NoSound = true; 
+				}
+				else
+					sc.ScriptError("Unknown flag '%s'.", sc.String);
+
+				if(!sc.CheckToken('|'))
+				{
+					break;
+				}
+			}
+		}
+		else if (sc.Compare("Item"))
+		{
+			if(!DrawItems)
+			{
+				order[OrderCount] = Items;//Set order show
+				OrderCount++;
+			}
+
+			ShowItems = true;
+			DrawItems = true;
+
+			ParseAssign();
+			sc.MustGetString();
+			if (sc.Compare("pic")){ParseComma(); sc.MustGetString(); Stats.Layer[Items].Pic = sc.String;}
+			else if (sc.Compare("text")){ParseComma(); sc.MustGetString(); Stats.Layer[Items].Text = sc.String;}
+			ParseComma();
+			sc.MustGetNumber ();
+			Stats.Layer[Items].PosX = sc.Number;
+			ParseComma();
+			sc.MustGetNumber ();
+			Stats.Layer[Items].PosY = sc.Number;
+			ParseComma();
+			sc.MustGetNumber ();
+			Stats.Layer[Items].Pos2X = sc.Number;
+			ParseComma();
+			sc.MustGetNumber ();
+			Stats.Layer[Items].Pos2Y = sc.Number;
+
+			if(sc.CheckToken(','))
+			while(sc.CheckToken(TK_Identifier))
+			{
+				if(sc.Compare("RowPaddingPercent"))
+				{
+					sc.MustGetToken('(');
+					sc.MustGetNumber();
+					Stats.Layer[Items].RowPaddingPercent = sc.Number;
+					sc.MustGetToken(')');
+				}
+				else if(sc.Compare("Delay"))
+				{
+					sc.MustGetToken('(');
+					sc.MustGetNumber();
+					Stats.Layer[Items].Delay = sc.Number;
+					sc.MustGetToken(')');
+
+					/*if(OrderCount == 1)
+					{
+						cnt_pause_custom = Stats.Layer[Items].Delay;
+					}*/
+				}
+				else if(sc.Compare("Alignment"))
+				{
+					sc.MustGetToken('(');
+					sc.MustGetToken(TK_Identifier);
+					if(sc.Compare("right"))
+						Stats.Layer[Items].Alignment = ALIGN_RIGHT;
+					else if(sc.Compare("left"))
+						Stats.Layer[Items].Alignment = ALIGN_LEFT;
+					else if(sc.Compare("center"))
+						Stats.Layer[Items].Alignment = ALIGN_CENTER;
+					else
+						sc.ScriptError("Unknown alignment '%s'.", sc.String);
+					sc.MustGetToken(')');
+				}
+				else if(sc.Compare("NoShow"))
+				{
+					ShowItems = false; 
+				}
+				else if(sc.Compare("NoCounter"))
+				{
+					CounterItems = false; 
+				}
+				else if(sc.Compare("ShowPercent"))
+				{
+					Stats.Layer[Items].ShowPercent = true; 
+				}
+				else if(sc.Compare("NoSound"))
+				{
+					Stats.Layer[Items].NoSound = true; 
+				}
+				else
+					sc.ScriptError("Unknown flag '%s'.", sc.String);
+				
+				if(!sc.CheckToken('|'))
+				{
+					break;
+				}
+			}
+		}
+		else if (sc.Compare("Secret"))
+		{
+			if(!DrawSecret)
+			{
+				order[OrderCount] = Secret;//Set order show
+				OrderCount++;
+			}
+
+			ShowSecret = true;
+			DrawSecret = true;
+
+			ParseAssign();
+			sc.MustGetString();
+			if (sc.Compare("pic")){ParseComma(); sc.MustGetString(); Stats.Layer[Secret].Pic = sc.String;}
+			else if (sc.Compare("text")){ParseComma(); sc.MustGetString(); Stats.Layer[Secret].Text = sc.String;}
+			ParseComma();
+			sc.MustGetNumber ();
+			Stats.Layer[Secret].PosX = sc.Number;
+			ParseComma();
+			sc.MustGetNumber ();
+			Stats.Layer[Secret].PosY = sc.Number;
+			ParseComma();
+			sc.MustGetNumber ();
+			Stats.Layer[Secret].Pos2X = sc.Number;
+			ParseComma();
+			sc.MustGetNumber ();
+			Stats.Layer[Secret].Pos2Y = sc.Number;
+			
+			if(sc.CheckToken(','))
+			while(sc.CheckToken(TK_Identifier))
+			{
+				if(sc.Compare("RowPaddingPercent"))
+				{
+					sc.MustGetToken('(');
+					sc.MustGetNumber();
+					Stats.Layer[Secret].RowPaddingPercent = sc.Number;
+					sc.MustGetToken(')');
+				}
+				else if(sc.Compare("Delay"))
+				{
+					sc.MustGetToken('(');
+					sc.MustGetNumber();
+					Stats.Layer[Secret].Delay = sc.Number;
+					sc.MustGetToken(')');
+
+					/*if(OrderCount == 1)
+					{
+						cnt_pause_custom = Stats.Layer[Secret].Delay;
+					}*/
+				}
+				else if(sc.Compare("Alignment"))
+				{
+					sc.MustGetToken('(');
+					sc.MustGetToken(TK_Identifier);
+					if(sc.Compare("right"))
+						Stats.Layer[Secret].Alignment = ALIGN_RIGHT;
+					else if(sc.Compare("left"))
+						Stats.Layer[Secret].Alignment = ALIGN_LEFT;
+					else if(sc.Compare("center"))
+						Stats.Layer[Secret].Alignment = ALIGN_CENTER;
+					else
+						sc.ScriptError("Unknown alignment '%s'.", sc.String);
+					sc.MustGetToken(')');
+				}
+				else if(sc.Compare("NoShow"))
+				{
+					ShowSecret = false; 
+				}
+				else if(sc.Compare("NoCounter"))
+				{
+					CounterSecret = false; 
+				}
+				else if(sc.Compare("ShowPercent"))
+				{
+					Stats.Layer[Secret].ShowPercent = true; 
+				}
+				else if(sc.Compare("NoSound"))
+				{
+					Stats.Layer[Secret].NoSound = true; 
+				}
+				else
+					sc.ScriptError("Unknown flag '%s'.", sc.String);
+				
+				if(!sc.CheckToken('|'))
+				{
+					break;
+				}
+			}
+		}
+		else if (sc.Compare("Time"))
+		{
+			if(!DrawTime)
+			{
+				order[OrderCount] = Time;//Set order show
+				OrderCount++;
+			}
+
+			ShowTime = true;
+			DrawTime = true;
+
+			ParseAssign();
+			sc.MustGetString();
+			if (sc.Compare("pic")){ParseComma(); sc.MustGetString(); Stats.Layer[Time].Pic = sc.String;}
+			else if (sc.Compare("text")){ParseComma(); sc.MustGetString(); Stats.Layer[Time].Text = sc.String;}
+			ParseComma();
+			sc.MustGetNumber ();
+			Stats.Layer[Time].PosX = sc.Number;
+			ParseComma();
+			sc.MustGetNumber ();
+			Stats.Layer[Time].PosY = sc.Number;
+			ParseComma();
+			sc.MustGetNumber ();
+			Stats.Layer[Time].Pos2X = sc.Number;
+			ParseComma();
+			sc.MustGetNumber ();
+			Stats.Layer[Time].Pos2Y = sc.Number;
+
+			if(sc.CheckToken(','))
+			while(sc.CheckToken(TK_Identifier))
+			{
+				if(sc.Compare("RowPaddingPercent"))
+				{
+					sc.MustGetToken('(');
+					sc.MustGetNumber();
+					Stats.Layer[Time].RowPaddingPercent = sc.Number;
+					sc.MustGetToken(')');
+				}
+				else if(sc.Compare("Delay"))
+				{
+					sc.MustGetToken('(');
+					sc.MustGetNumber();
+					Stats.Layer[Time].Delay = sc.Number;
+					sc.MustGetToken(')');
+
+					/*if(OrderCount == 1)
+					{
+						cnt_pause_custom = Stats.Layer[Time].Delay;
+					}*/
+				}
+				else if(sc.Compare("Alignment"))
+				{
+					sc.MustGetToken('(');
+					sc.MustGetToken(TK_Identifier);
+					if(sc.Compare("right"))
+						Stats.Layer[Time].Alignment = ALIGN_RIGHT;
+					else if(sc.Compare("left"))
+						Stats.Layer[Time].Alignment = ALIGN_LEFT;
+					else if(sc.Compare("center"))
+						Stats.Layer[Time].Alignment = ALIGN_CENTER;
+					else
+						sc.ScriptError("Unknown alignment '%s'.", sc.String);
+					sc.MustGetToken(')');
+				}
+				else if(sc.Compare("NoShow"))
+				{
+					ShowTime = false; 
+				}
+				else if(sc.Compare("NoCounter"))
+				{
+					CounterTime = false; 
+				}
+				else if(sc.Compare("NoSound"))
+				{
+					Stats.Layer[Time].NoSound = true; 
+				}
+				else
+					sc.ScriptError("Unknown flag '%s'.", sc.String);
+				
+				if(!sc.CheckToken('|'))
+				{
+					break;
+				}
+			}
+		}
+		else if (sc.Compare("TotalTime"))
+		{
+			ParseAssign();
+			sc.MustGetString();
+			if (sc.Compare("pic")){ParseComma(); sc.MustGetString(); Stats.Layer[TotalTime].Pic = sc.String;}
+			else if (sc.Compare("text")){ParseComma(); sc.MustGetString(); Stats.Layer[TotalTime].Text = sc.String;}
+			ParseComma();
+			sc.MustGetNumber ();
+			Stats.Layer[TotalTime].PosX = sc.Number;
+			ParseComma();
+			sc.MustGetNumber ();
+			Stats.Layer[TotalTime].PosY = sc.Number;
+			ParseComma();
+			sc.MustGetNumber ();
+			Stats.Layer[TotalTime].Pos2X = sc.Number;
+			ParseComma();
+			sc.MustGetNumber ();
+			Stats.Layer[TotalTime].Pos2Y = sc.Number;
+			ParseComma();
+			sc.MustGetNumber ();
+			Stats.Layer[TotalTime].RowPaddingPercent = sc.Number;
+
+			/*if(sc.Compare("alignment"))
+			{
+				Stats.Layer[TotalTime].Alignment = GetAlignment(sc);
+			}*/
+		}
+		else if (sc.Compare("ParTime"))
+		{
+			ParseAssign();
+			sc.MustGetString();
+			if (sc.Compare("pic")){ParseComma(); sc.MustGetString(); Stats.Layer[ParTime].Pic = sc.String;}
+			else if (sc.Compare("text")){ParseComma(); sc.MustGetString(); Stats.Layer[ParTime].Text = sc.String;}
+			ParseComma();
+			sc.MustGetNumber ();
+			Stats.Layer[ParTime].PosX = sc.Number;
+			ParseComma();
+			sc.MustGetNumber ();
+			Stats.Layer[ParTime].PosY = sc.Number;
+			ParseComma();
+			sc.MustGetNumber ();
+			Stats.Layer[ParTime].Pos2X = sc.Number;
+			ParseComma();
+			sc.MustGetNumber ();
+			Stats.Layer[ParTime].Pos2Y = sc.Number;
+			ParseComma();
+			sc.MustGetNumber ();
+			Stats.Layer[ParTime].RowPaddingPercent = sc.Number;
+
+			/*if(sc.Compare("alignment"))
+			{
+				Stats.Layer[ParTime].Alignment = GetAlignment(sc);
+			}*/
+		}
+		else if (sc.Compare("Sucks"))
+		{
+			ParseAssign();
+			sc.MustGetString();
+			if (sc.Compare("pic")){ParseComma(); sc.MustGetString(); Stats.Layer[Suck].Pic = sc.String;}
+			else if (sc.Compare("text")){ParseComma(); sc.MustGetString(); Stats.Layer[Suck].Text = sc.String;}
+			ParseComma();
+			sc.MustGetNumber ();
+			Stats.Layer[Suck].PosX = sc.Number;
+			ParseComma();
+			sc.MustGetNumber ();
+			Stats.Layer[Suck].PosY = sc.Number;
+		}
+		else
+		{
+			//sc.ScriptError("Unknown keyword '%s'", sc.String);
+			break;
+		}
+	}
+
+	if(!ShowEntering)
+	{
+		order[OrderCount] = Entering;//Set order show
+		OrderCount++;
+	}
 }

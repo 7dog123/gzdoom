@@ -142,6 +142,10 @@ public:
 	fixed_t		AirCapacity;			// Multiplier for air supply underwater.
 	const PClass *FlechetteType;
 
+	fixed_t		LandingSpeed;//[GEC]
+	fixed_t		MoveBob;//[GEC]
+	bool		MoveBob_;//[GEC]
+
 	// [CW] Fades for when you are being damaged.
 	PalEntry DamageFade;
 
@@ -164,6 +168,9 @@ enum
 	PPF_NOTHRUSTWHENINVUL = 1,	// Attacks do not thrust the player if they are invulnerable.
 	PPF_CANSUPERMORPH = 2,		// Being remorphed into this class can give you a Tome of Power
 	PPF_CROUCHABLEMORPH = 4,	// This morphed player can crouch
+	PPF_MOVEONLYONGROUND = 8,			// [GEC] Move Only onground
+	PPF_PAINFACEONSECTORDAMAGE = 16,	// [GEC] Psx draw pain face on sector damage 
+	PPF_AUTOTELEFRAG = 32,				// [GEC] Psx & D64 PlayerAutoTeleFrag
 };
 
 //
@@ -384,6 +391,7 @@ public:
 	fixed_t		viewheight;				// base height above floor for viewz
 	fixed_t		deltaviewheight;		// squat speed.
 	fixed_t		bob;					// bounded/scaled total velocity
+	fixed_t		landingspeed;			//[GEC]landing speed player
 
 	// killough 10/98: used for realistic bobbing (i.e. not simply overall speed)
 	// mo->velx and mo->vely represent true velocity experienced by player.
@@ -479,6 +487,10 @@ public:
 	TObjPtr<AActor> ConversationNPC, ConversationPC;
 	angle_t ConversationNPCAngle;
 	bool ConversationFaceTalker;
+
+	bool		secdamage;	// [GEC] Psx draw pain face on sector damage 
+	PalEntry	bfgcolor;	// [GEC]
+	int			bfgticdown;	// [GEC]
 
 	fixed_t GetDeltaViewHeight() const
 	{

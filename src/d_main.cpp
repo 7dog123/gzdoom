@@ -108,6 +108,14 @@
 #include "r_renderer.h"
 #include "p_local.h"
 
+#include "pagedefs.h"//[GEC]
+
+extern bool DrawCustomPage; //[GEC]
+extern bool Force_Wipe; //[GEC]
+extern bool Force_Clear; //[GEC]
+extern bool ResetCount; //[GEC]
+extern int RestarPage; //[GEC]
+
 EXTERN_CVAR(Bool, hud_althud)
 void DrawHUD();
 
@@ -163,6 +171,11 @@ extern bool insave;
 
 
 // PUBLIC DATA DEFINITIONS -------------------------------------------------
+
+int GetTicrate(void) // [GEC]
+{
+	return gameinfo.ticrate30 ? 30 : 35;
+}
 
 CUSTOM_CVAR (Int, fraglimit, 0, CVAR_SERVERINFO)
 {
@@ -232,8 +245,9 @@ cycle_t FrameCycles;
 
 // PRIVATE DATA DEFINITIONS ------------------------------------------------
 
-static int demosequence;
-static int pagetic;
+int demosequence;
+int pagetic;
+//SWORD keyborad;				// [GEC]keyborad
 
 // CODE --------------------------------------------------------------------
 
@@ -268,6 +282,16 @@ void D_ProcessEvents (void)
 	for (; eventtail != eventhead ; eventtail = (eventtail+1)&(MAXEVENTS-1))
 	{
 		ev = &events[eventtail];
+
+		/*if (ev->type == EV_KeyDown)// [GEC]keyborad
+		{
+			keyborad = ev->data2;
+			if (keyborad == 0)
+			keyborad = ev->data1;
+		}*/
+
+		ResetCount = true;//[GEC]
+
 		if (ev->type == EV_None)
 			continue;
 		if (ev->type == EV_DeviceChange)
@@ -299,6 +323,7 @@ void D_PostEvent (const event_t *ev)
 	if (ev->type == EV_Mouse && !paused && menuactive == MENU_Off && ConsoleState != c_down && ConsoleState != c_falling
 		)
 	{
+		ResetCount = true;//[GEC]
 		if (Button_Mlook.bDown || freelook)
 		{
 			int look = int(ev->y * m_pitch * mouse_sensitivity * 16.0);
@@ -712,6 +737,10 @@ void D_Display ()
 			wipe = screen->WipeStartScreen (wipetype);
 			break;
 
+		case GS_FORCEWIPENONE: //[GEC]
+			wipe = screen->WipeStartScreen (wipe_None);
+			break;
+
 		case GS_FORCEWIPEFADE:
 			wipe = screen->WipeStartScreen (wipe_Fade);
 			break;
@@ -723,6 +752,19 @@ void D_Display ()
 		case GS_FORCEWIPEMELT:
 			wipe = screen->WipeStartScreen (wipe_Melt);
 			break;
+
+		case GS_FORCEWIPEMELT64:
+			wipe = screen->WipeStartScreen (wipe_Melt64);
+			break;
+
+		case GS_FORCEWIPEFADESCREEN:
+			wipe = screen->WipeStartScreen (wipe_FadeScreen);
+			break;
+
+		case GS_FORCEWIPELOADINGSCREEN:
+			wipe = screen->WipeStartScreen (wipe_LoadingScreen);
+			break;
+
 		}
 		wipegamestate = gamestate;
 	}
@@ -825,10 +867,17 @@ void D_Display ()
 			break;
 
 		case GS_DEMOSCREEN:
-			screen->SetBlendingRect(0,0,0,0);
+			/*screen->SetBlendingRect(0,0,0,0);
 			hw2d = screen->Begin2D(false);
 			D_PageDrawer ();
+			CT_Drawer ();*/
+
+			screen->SetBlendingRect(0,0,0,0);
+			hw2d = screen->Begin2D(false);
+			if(DrawCustomPage){D_CustomPageDrawer();}//[GEC]
+			else{D_PageDrawer ();}
 			CT_Drawer ();
+			//if(Force_Abort){D_AbortDrawer();}//[GEC]
 			break;
 
 		default:
@@ -899,6 +948,7 @@ void D_Display ()
 
 		do
 		{
+			WipeDone = false;//[GEC]
 			do
 			{
 				I_WaitVBL(2);
@@ -907,12 +957,13 @@ void D_Display ()
 			} while (diff < 1);
 			wipestart = nowtime;
 			done = screen->WipeDo (1);
-			S_UpdateMusic();		// OpenAL needs this to keep the music running, thanks to a complete lack of a sane streaming implementation using callbacks. :(
+			S_UpdateMusic();//[GEC]	// OpenAL needs this to keep the music running, thanks to a complete lack of a sane streaming implementation using callbacks. :(
 			C_DrawConsole (hw2d);	// console and
 			M_Drawer ();			// menu are drawn even on top of wipes
 			screen->Update ();		// page flip or blit buffer
 			NetUpdate ();			// [RH] not sure this is needed anymore
 		} while (!done);
+		WipeDone = true;//[GEC]
 		screen->WipeCleanup();
 		I_FreezeTime(false);
 		GSnd->SetSfxPaused(false, 1);
@@ -1233,6 +1284,12 @@ void D_DoAdvanceDemo (void)
 		return;
 	}
 
+	if(DrawCustomPage)
+	{
+		D_DoCustomAdvanceDemo();//[GEC]
+		return;
+	}
+
 	if (gameinfo.gametype == GAME_Strife)
 	{
 		D_DoStrifeAdvanceDemo ();
@@ -1311,10 +1368,15 @@ void D_DoAdvanceDemo (void)
 //
 //==========================================================================
 
-void D_StartTitle (void)
+void D_StartTitle (bool setpage)//[GEC]
 {
 	gameaction = ga_nothing;
-	demosequence = -1;
+
+	if(RestarPage != -1 && setpage)
+		demosequence = RestarPage;//[GEC]
+	else
+		demosequence = -1;
+
 	D_AdvanceDemo ();
 }
 
@@ -1474,7 +1536,7 @@ void ParseCVarInfo()
 
 bool D_AddFile (TArray<FString> &wadfiles, const char *file, bool check, int position)
 {
-	if (file == NULL)
+	if (file == NULL || *file == '\0')
 	{
 		return false;
 	}
@@ -1505,6 +1567,10 @@ bool D_AddFile (TArray<FString> &wadfiles, const char *file, bool check, int pos
 
 void D_AddWildFile (TArray<FString> &wadfiles, const char *value)
 {
+	if (value == NULL || *value == '\0')
+	{
+		return;
+	}
 	const char *wadfile = BaseFileSearch (value, ".wad");
 
 	if (wadfile != NULL)
@@ -1646,6 +1712,10 @@ static const char *BaseFileSearch (const char *file, const char *ext, bool lookf
 {
 	static char wad[PATH_MAX];
 
+	if (file == NULL || *file == '\0')
+	{
+		return NULL;
+	}
 	if (lookfirstinprogdir)
 	{
 		mysnprintf (wad, countof(wad), "%s%s%s", progdir.GetChars(), progdir[progdir.Len() - 1] != '/' ? "/" : "", file);
@@ -2409,6 +2479,10 @@ void D_DoomMain (void)
 		Printf ("ParseTeamInfo: Load team definitions.\n");
 		TeamLibrary.ParseTeamInfo ();
 
+		// [GEC] Parse any PAGEDEFS lumps.
+		Printf ("ParsePageDefs: Load page definitions.\n");
+		ParsePageDefs();
+
 		FActorInfo::StaticInit ();
 
 		// [GRB] Initialize player class list
@@ -2429,6 +2503,21 @@ void D_DoomMain (void)
 		Printf ("R_Init: Init %s refresh subsystem.\n", gameinfo.ConfigName.GetChars());
 		StartScreen->LoadingStatus ("Loading graphics", 0x3f);
 		R_Init ();
+
+		//[GEC] Init scalefriction
+		if(gameinfo.scalefriction > 0)
+		{
+			FRICTION_BASE[0] = clamp(FixedMul(0xE800, FLOAT2FIXED(gameinfo.scalefriction)), 0, FRACUNIT);//ORIG_FRICTION
+			FRICTION_BASE[1] = clamp(FixedMul(0xF900, FLOAT2FIXED(gameinfo.scalefriction)), 0, FRACUNIT);//FRICTION_LOW
+			FRICTION_BASE[2] = clamp(FixedMul(0xEB00, FLOAT2FIXED(gameinfo.scalefriction)), 0, FRACUNIT);//FRICTION_FLY
+		}
+		else
+		{
+			FRICTION_BASE[0] = 0xE800;//ORIG_FRICTION
+			FRICTION_BASE[1] = 0xF900;//FRICTION_LOW
+			FRICTION_BASE[2] = 0xEB00;//FRICTION_FLY
+		}
+		//Printf("%x %x %x\n",FRICTION_BASE[0],FRICTION_BASE[1],FRICTION_BASE[2]);
 
 		Printf ("DecalLibrary: Load decals.\n");
 		DecalLibrary.ReadAllDecals ();
@@ -2580,6 +2669,10 @@ void D_DoomMain (void)
 					if (demorecording)
 						G_BeginRecording (startmap);
 					G_InitNew (startmap, false);
+
+					if(gameinfo.mStartWipe != GS_DEMOSCREEN)//[GEC]
+						wipegamestate = gameinfo.mStartWipe;
+
 					if (StoredWarp.IsNotEmpty())
 					{
 						AddCommandString(StoredWarp.LockBuffer());
@@ -2605,7 +2698,7 @@ void D_DoomMain (void)
 			// These calls from inside V_Init2 are still necessary
 			C_NewModeAdjust();
 			M_InitVideoModesMenu();
-			D_StartTitle ();				// start up intro loop
+			D_StartTitle ();				// [GEC] start up intro loop
 			setmodeneeded = false;			// This may be set to true here, but isn't needed for a restart
 		}
 

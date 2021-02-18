@@ -110,7 +110,7 @@ static void CalcPosVel(int type, const AActor *actor, const sector_t *sector, co
 static void CalcSectorSoundOrg(const sector_t *sec, int channum, fixed_t *x, fixed_t *y, fixed_t *z);
 static void CalcPolyobjSoundOrg(const FPolyObj *poly, fixed_t *x, fixed_t *y, fixed_t *z);
 static FSoundChan *S_StartSound(AActor *mover, const sector_t *sec, const FPolyObj *poly,
-	const FVector3 *pt, int channel, FSoundID sound_id, float volume, float attenuation, FRolloffInfo *rolloff);
+	const FVector3 *pt, int channel, FSoundID sound_id, float volume, float attenuation, FRolloffInfo *rolloff, bool noreverb);//[GEC]
 static void S_SetListener(SoundListener &listener, AActor *listenactor);
 
 // PRIVATE DATA DEFINITIONS ------------------------------------------------
@@ -829,9 +829,11 @@ static void CalcPolyobjSoundOrg(const FPolyObj *poly, fixed_t *x, fixed_t *y, fi
 //
 //==========================================================================
 
+CVAR (Bool, snd_limit, false, CVAR_ARCHIVE|CVAR_GLOBALCONFIG)//[GEC]
+
 static FSoundChan *S_StartSound(AActor *actor, const sector_t *sec, const FPolyObj *poly,
 	const FVector3 *pt, int channel, FSoundID sound_id, float volume, float attenuation,
-	FRolloffInfo *forcedrolloff=NULL)
+	FRolloffInfo *forcedrolloff=NULL, bool noreverb = false)
 {
 	sfxinfo_t *sfx;
 	int chanflags;
@@ -956,9 +958,12 @@ static FSoundChan *S_StartSound(AActor *actor, const sector_t *sec, const FPolyO
 	}
 
 	// If this is a singular sound, don't play it if it's already playing.
-	if (sfx->bSingular && S_CheckSingular(sound_id))
+	//if(!snd_limit)//[GEC] Evita el limite de sonidos
 	{
-		chanflags |= CHAN_EVICTED;
+		if (sfx->bSingular && S_CheckSingular(sound_id))
+		{
+			chanflags |= CHAN_EVICTED;
+		}
 	}
 
 	// If the sound is unpositioned or comes from the listener, it is
@@ -970,9 +975,12 @@ static FSoundChan *S_StartSound(AActor *actor, const sector_t *sec, const FPolyO
 
 	// If this sound doesn't like playing near itself, don't play it if
 	// that's what would happen.
-	if (near_limit > 0 && S_CheckSoundLimit(sfx, pos, near_limit, limit_range, actor, channel))
+	if(!snd_limit)//[GEC] Evita el limite de sonidos
 	{
-		chanflags |= CHAN_EVICTED;
+		if (near_limit > 0 && S_CheckSoundLimit(sfx, pos, near_limit, limit_range, actor, channel))
+		{
+			chanflags |= CHAN_EVICTED;
+		}
 	}
 
 	// If the sound is blocked and not looped, return now. If the sound
@@ -1081,6 +1089,11 @@ static FSoundChan *S_StartSound(AActor *actor, const sector_t *sec, const FPolyO
 		if (chanflags & CHAN_AREA) startflags |= SNDF_AREA;
 		if (chanflags & (CHAN_UI|CHAN_NOPAUSE)) startflags |= SNDF_NOPAUSE;
 		if (chanflags & CHAN_UI) startflags |= SNDF_NOREVERB;
+
+		if (noreverb)//[GEC]
+		{
+			startflags |= SNDF_NOREVERB;
+		}
 
 		if (attenuation > 0)
 		{
@@ -1216,11 +1229,20 @@ void S_Sound (int channel, FSoundID sound_id, float volume, float attenuation)
 //
 //==========================================================================
 
-void S_Sound (AActor *ent, int channel, FSoundID sound_id, float volume, float attenuation)
+void S_Sound (AActor *ent, int channel, FSoundID sound_id, float volume, float attenuation, bool forcereverb)
 {
+	bool noreverb = false;
 	if (ent == NULL || ent->Sector->Flags & SECF_SILENT)
+	{
 		return;
-	S_StartSound (ent, NULL, NULL, NULL, channel, sound_id, volume, attenuation);
+	}
+	else if (ent == NULL || ent->Sector->Flags & SECF_REVERB_OFF)//[GEC]
+	{
+		noreverb = true;
+		if(forcereverb)	{noreverb = false;}
+	}
+
+	S_StartSound (ent, NULL, NULL, NULL, channel, sound_id, volume, attenuation, 0, noreverb);
 }
 
 //==========================================================================
@@ -1966,6 +1988,8 @@ static void S_SetListener(SoundListener &listener, AActor *listenactor)
 		listener.underwater = listenactor->waterlevel == 3;
 		assert(zones != NULL);
 		listener.Environment = zones[listenactor->Sector->ZoneNumber].Environment;
+		if(listenactor->Sector->EnvironmentSector != NULL)//[GEC]
+			listener.Environment = listenactor->Sector->EnvironmentSector;
 		listener.valid = true;
 	}
 	else
@@ -2509,6 +2533,12 @@ bool S_ChangeMusic (const char *musicname, int order, bool looping, bool force)
 		return true;
 	}
 	return false;
+}
+
+// [GEC] Check Music Playing
+bool S_CheckMusicPlaying ()
+{
+	return mus_playing.handle->IsPlaying()? true : false;
 }
 
 //==========================================================================

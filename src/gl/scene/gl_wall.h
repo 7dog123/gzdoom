@@ -57,6 +57,11 @@ struct texcoord
 	float u,v;
 };
 
+struct vertcolor//[GEC]
+{
+	float r,g,b,a;
+};
+
 //==========================================================================
 //
 // One sector plane, still in fixed point
@@ -113,6 +118,7 @@ public:
 	float alpha;
 	FMaterial *gltexture;
 
+	PalEntry Wallcolor[4];	//	[GEC]
 	FColormap Colormap;
 	ERenderStyle RenderStyle;
 	
@@ -127,6 +133,9 @@ public:
 	float bottomglowcolor[4];
 
 	int firstdynlight, lastdynlight;
+
+	//unsigned int SoftWall;//[GEC]
+	//float LastFactor;//[GEC]
 
 	union
 	{
@@ -157,7 +166,9 @@ private:
 
 	void SetupLights();
 	bool PrepareLight(texcoord * tcs, ADynamicLight * light);
-	void RenderWall(int textured, float * color2, ADynamicLight * light=NULL);
+	//void RenderWall(int textured, float * color2, ADynamicLight * light=NULL);
+	void RenderWall(int textured, float * color2, ADynamicLight * light=NULL, bool color = false, float alpha = 1.0f, int extra = 0);//[GEC]
+	void SetHVMirror();//[GEC]
 
 	void FloodPlane(int pass);
 
@@ -203,6 +214,9 @@ private:
 					  fixed_t fch1, fixed_t fch2, fixed_t ffh1, fixed_t ffh2,
 					  fixed_t bch1, fixed_t bch2, fixed_t bfh1, fixed_t bfh2);
 
+	int GetLightPSXDecal(int light, int count, int div = 1);//[GEC]
+	void SetSpecialsDecal(FMaterial * tex, FColormap p, int light, int rellight, int light64);//[GEC]
+
 	void DrawDecal(DBaseDecal *actor);
 	void DoDrawDecals();
 
@@ -210,16 +224,28 @@ private:
 	void RenderMirrorSurface();
 	void RenderTranslucentWall();
 
-	void SplitLeftEdge(texcoord * tcs);
-	void SplitRightEdge(texcoord * tcs);
-	void SplitUpperEdge(texcoord * tcs);
-	void SplitLowerEdge(texcoord * tcs);
+	void SplitLeftEdge(texcoord * tcs, texcoord * tcs2, int TexNum, vertcolor * vrgb);//[GEC]
+	void SplitRightEdge(texcoord * tcs, texcoord * tcs2, int TexNum, vertcolor * vrgb);//[GEC]
+	void SplitUpperEdge(texcoord * tcs, texcoord * tcs2, int TexNum, vertcolor * vrgb);//[GEC]
+	void SplitLowerEdge(texcoord * tcs, texcoord * tcs2, int TexNum, vertcolor * vrgb);//[GEC]
 
 public:
 
 	void Process(seg_t *seg, sector_t *frontsector, sector_t *backsector);
 	void ProcessLowerMiniseg(seg_t *seg, sector_t *frontsector, sector_t *backsector);
 	void Draw(int pass);
+
+	//[GEC]
+	void SetWallColors(seg_t *seg, bool forcethingcolor = false);
+	void R_SplitLineColor(int type, float FCH, float FFH,
+		float ffh1, float ffh2, float fch1, float fch2,
+		float bfh1, float bfh2, float bch1, float bch2);
+	void R_SetSegLineColor(seg_t * seg, int side, fixed_t FCH, fixed_t FFH,
+		fixed_t ffh1, fixed_t ffh2, fixed_t fch1, fixed_t fch2,
+		fixed_t bfh1, fixed_t bfh2, fixed_t bch1, fixed_t bch2);
+	bool R_GenerateSwitchPlane(seg_t *line);
+	void SetSpecials(int pass, int light, int rellight, int lightlevel64);//[GEC]
+	int GetLightPSX(int light, int count);//[GEC]
 
 	float PointOnSide(float x,float y)
 	{
@@ -276,10 +302,13 @@ public:
 	void DrawSubsectors(int pass, bool istrans);
 
 	void PutFlat(bool fog = false);
-	void Process(sector_t * model, int whichplane, bool notexture);
+	void Process(sector_t * model, int whichplane, bool notexture, int nexttexture = 0);// [GEC]
 	void SetFrom3DFloor(F3DFloor *rover, bool top, bool underside);
 	void ProcessSector(sector_t * frontsector);
 	void Draw(int pass);
+
+	void SetSpecials(int pass, int light, int rellight, int lightlevel64);//[GEC]
+	void GetLightPSX();//[GEC]
 };
 
 
@@ -322,12 +351,18 @@ public:
 	AActor * actor;
 	particle_t * particle;
 
+	BYTE lightlevel64;//[GEC]
+	//[GEC]Esto solo es para el laser
+	bool RenderLaser;
+	angle_t LaserAngle;
+
 	void SplitSprite(sector_t * frontsector, bool translucent);
 	void SetLowerParam();
 	void PerformSpriteClipAdjustment(AActor *thing, fixed_t thingx, fixed_t thingy, float spriteheight);
 
 public:
 
+	//void SetSpecials(bool fullbright,int light, int rellight);//[GEC]
 	void Draw(int pass);
 	void PutSprite(bool translucent);
 	void Process(AActor* thing,sector_t * sector);

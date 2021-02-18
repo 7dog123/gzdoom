@@ -21,7 +21,8 @@ struct GLRenderSettings
 	FVector3 skyrotatevector2;
 
 	float pixelstretch;
-
+	int mapheight;//[GEC]
+	bool clearbuffer;//[GEC]
 };
 
 extern GLRenderSettings glset;
@@ -32,6 +33,9 @@ extern GLRenderSettings glset;
 
 extern int extralight;
 EXTERN_CVAR(Int, gl_weaponlight);
+
+extern PalEntry flashcolor;// [GEC]
+extern bool psx_blend;// [GEC]
 
 inline	int getExtraLight()
 {

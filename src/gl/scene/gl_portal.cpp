@@ -63,6 +63,7 @@
 #include "gl/utility/gl_clock.h"
 #include "gl/utility/gl_templates.h"
 #include "gl/utility/gl_geometric.h"
+#include "gl/textures/gl_combiners.h"//[GEC]
 
 //-----------------------------------------------------------------------------
 //-----------------------------------------------------------------------------
@@ -956,6 +957,13 @@ int GLMirrorPortal::ClipPoint(fixed_t x, fixed_t y)
 //-----------------------------------------------------------------------------
 void GLHorizonPortal::DrawContents()
 {
+	int texturemode;//[GEC]
+	gl_RenderState.GetTextureMode(&texturemode);//Get TextureMode
+
+	float DynCol[3] = {0.0, 0.0, 0.0};//[GEC]
+	float FragCol[4] = {1.0, 1.0, 1.0, 1.0};//[GEC]
+	gl_RenderState.ResetSpecials();//[GEC]
+
 	PortalAll.Clock();
 
 	GLSectorPlane * sp=&origin->plane;
@@ -981,16 +989,25 @@ void GLHorizonPortal::DrawContents()
 		// glowing textures are always drawn full bright without color
 		gl_SetColor(255, 0, NULL, 1.f);
 		gl_SetFog(255, 0, &origin->colormap, false);
+
+		//[GEC]
+		gl_RenderState.GetFragColor(&FragCol[0], &FragCol[1], &FragCol[2], &FragCol[3]);//Get FragColor
+		SetInitSpecials(texturemode, glset.lightmode, 255, 0, origin->lightlevel64, false, FragCol, DynCol);
 	}
 	else 
 	{
 		int rel = getExtraLight();
 		gl_SetColor(origin->lightlevel, rel, &origin->colormap, 1.0f);
 		gl_SetFog(origin->lightlevel, rel, &origin->colormap, false);
+
+		//[GEC]
+		gl_RenderState.GetFragColor(&FragCol[0], &FragCol[1], &FragCol[2], &FragCol[3]);//Get FragColor
+		SetInitSpecials(texturemode, glset.lightmode, origin->lightlevel, rel, origin->lightlevel64, false, FragCol, DynCol);
 	}
 
 
 	gltexture->Bind(origin->colormap.colormap);
+	SetNewSpecials(gltexture, origin->colormap.colormap, false, false, true);//[GEC]
 
 	gl_RenderState.EnableAlphaTest(false);
 	gl_RenderState.BlendFunc(GL_ONE,GL_ZERO);
@@ -1070,6 +1087,9 @@ void GLHorizonPortal::DrawContents()
 
 	PortalAll.Unclock();
 
+	//[GEC] Reset default
+	Disable_texunits();
+	gl_RenderState.SetTextureMode(texturemode);
 }
 
 

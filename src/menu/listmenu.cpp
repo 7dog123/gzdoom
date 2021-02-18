@@ -42,6 +42,9 @@
 #include "d_event.h"
 #include "menu/menu.h"
 
+extern int MenuAlpha; //[GEC]
+extern bool MenuReset; //[GEC]
+
 IMPLEMENT_CLASS(DListMenu)
 
 //=============================================================================
@@ -156,7 +159,7 @@ bool DListMenu::Responder (event_t *ev)
 
 bool DListMenu::MenuEvent (int mkey, bool fromcontroller)
 {
-	int startedAt = mDesc->mSelectedItem;
+	/*int startedAt = mDesc->mSelectedItem;
 
 	switch (mkey)
 	{
@@ -187,7 +190,76 @@ bool DListMenu::MenuEvent (int mkey, bool fromcontroller)
 
 	default:
 		return Super::MenuEvent(mkey, fromcontroller);
+	}*/
+
+	int startedAt = mDesc->mSelectedItem;
+
+	switch (mkey)
+	{
+	case MKEY_Up:
+		/*if (mDesc->mSelectedItem == -1)
+		{
+			//mDesc->mSelectedItem = FirstSelectable();
+			break;
+		}*/
+		do
+		{
+			--mDesc->mSelectedItem;
+
+			if (mDesc->mSelectedItem < 0) 
+			{
+				// Figure out how many lines of text fit on the menu
+
+				mDesc->mSelectedItem = mDesc->mItems.Size()-1;
+			}
+		}
+		while (!mDesc->mItems[mDesc->mSelectedItem]->Selectable() && mDesc->mSelectedItem != startedAt);
+		break;
+
+	case MKEY_Down:
+		/*if (mDesc->mSelectedItem == -1)
+		{
+			//mDesc->mSelectedItem = FirstSelectable();
+			break;
+		}*/
+		do
+		{
+			++mDesc->mSelectedItem;
+
+			if (mDesc->mSelectedItem >= (int)mDesc->mItems.Size()) 
+			{
+				if (startedAt == -1)
+				{
+					mDesc->mSelectedItem = -1;
+					break;
+				}
+				else
+				{
+					mDesc->mSelectedItem = 0;
+				}
+			}
+		}
+		while (!mDesc->mItems[mDesc->mSelectedItem]->Selectable() && mDesc->mSelectedItem != startedAt);
+		break;
+
+	case MKEY_Enter:
+		if (mDesc->mSelectedItem >= 0 && mDesc->mItems[mDesc->mSelectedItem]->Activate())
+		{
+			S_Sound (CHAN_VOICE | CHAN_UI, "menu/choose", snd_menuvolume, ATTN_NONE);
+			return true;
+		}
+		// fall through to default
+	default:
+		if (mDesc->mSelectedItem >= 0 && 
+			mDesc->mItems[mDesc->mSelectedItem]->MenuEvent(mkey, fromcontroller)) return true;
+		return Super::MenuEvent(mkey, fromcontroller);
 	}
+
+	if (mDesc->mSelectedItem != startedAt)
+	{
+		S_Sound (CHAN_VOICE | CHAN_UI, "menu/cursor", snd_menuvolume, ATTN_NONE);
+	}
+	return true;
 }
 
 //=============================================================================
@@ -200,9 +272,28 @@ bool DListMenu::MouseEvent(int type, int x, int y)
 {
 	int sel = -1;
 
-	// convert x/y from screen to virtual coordinates, according to CleanX/Yfac use in DrawTexture
-	x = ((x - (screen->GetWidth() / 2)) / CleanXfac) + 160;
-	y = ((y - (screen->GetHeight() / 2)) / CleanYfac) + 100;
+	if(mDesc->mResW != 0 && mDesc->mResH != 0)//[GEC] Scale XY mouse position
+	{
+		// Get current mouse position
+		int mouseX = x;
+		int mouseY = y;
+
+		float scaleX = ((float)screen->GetWidth() / (float)mDesc->mResW);
+		float scaleY = ((float)screen->GetHeight() / (float)mDesc->mResH);
+
+		// Aply scale
+		mouseX /= scaleX;
+		mouseY /= scaleY;
+
+		x = mouseX;
+		y = mouseY;
+	}
+	else
+	{
+		// convert x/y from screen to virtual coordinates, according to CleanX/Yfac use in DrawTexture
+		x = ((x - (screen->GetWidth() / 2)) / CleanXfac) + 160;
+		y = ((y - (screen->GetHeight() / 2)) / CleanYfac) + 100;
+	}
 
 	if (mFocusControl != NULL)
 	{
@@ -261,7 +352,7 @@ void DListMenu::Drawer ()
 		if (mDesc->mItems[i]->mEnabled) mDesc->mItems[i]->Drawer(mDesc->mSelectedItem == (int)i);
 	}
 	if (mDesc->mSelectedItem >= 0 && mDesc->mSelectedItem < (int)mDesc->mItems.Size())
-		mDesc->mItems[mDesc->mSelectedItem]->DrawSelector(mDesc->mSelectOfsX, mDesc->mSelectOfsY, mDesc->mSelector);
+		mDesc->mItems[mDesc->mSelectedItem]->DrawSelector(mDesc->mSelectOfsX, mDesc->mSelectOfsY, mDesc->mSelector, mDesc->mResW, mDesc->mResH);//[GEC]
 	Super::Drawer();
 }
 
@@ -293,7 +384,7 @@ bool FListMenuItem::Selectable()
 	return false;
 }
 
-void FListMenuItem::DrawSelector(int xofs, int yofs, FTextureID tex)
+void FListMenuItem::DrawSelector(int xofs, int yofs, FTextureID tex, int resw, int resh)
 {
 	if (tex.isNull())
 	{
@@ -305,12 +396,24 @@ void FListMenuItem::DrawSelector(int xofs, int yofs, FTextureID tex)
 				"\xd",
 				DTA_CellX, 8 * CleanXfac,
 				DTA_CellY, 8 * CleanYfac,
-				TAG_DONE);
+				DTA_Alpha, MenuAlpha, TAG_DONE);//[GEC]
 		}
 	}
 	else
 	{
-		screen->DrawTexture (TexMan(tex), mXpos + xofs, mYpos + yofs, DTA_Clean, true, TAG_DONE);
+		if(resw != 0 && resh != 0)
+		{
+			screen->DrawTexture (TexMan(tex), mXpos + xofs, mYpos + yofs, 
+			DTA_Bottom320x200, false,// activate virtBottom
+			DTA_VirtualWidthF, (double)resw,
+			DTA_VirtualHeightF, (double)resh,
+			DTA_Alpha, MenuAlpha,
+			TAG_DONE);//[GEC]
+		}
+		else
+		{
+			screen->DrawTexture (TexMan(tex), mXpos + xofs, mYpos + yofs, DTA_Clean, true, DTA_Alpha, MenuAlpha, TAG_DONE);//[GEC]
+		}
 	}
 }
 
@@ -376,11 +479,13 @@ int FListMenuItem::GetWidth()
 //
 //=============================================================================
 
-FListMenuItemStaticPatch::FListMenuItemStaticPatch(int x, int y, FTextureID patch, bool centered)
+FListMenuItemStaticPatch::FListMenuItemStaticPatch(int x, int y, FTextureID patch, bool centered, int resw, int resh)//[GEC]
 : FListMenuItem(x, y)
 {
 	mTexture = patch;
 	mCentered = centered;
+	mResW = resw;//[GEC]
+	mResH = resh;//[GEC]
 }
 	
 void FListMenuItemStaticPatch::Drawer(bool selected)
@@ -392,16 +497,31 @@ void FListMenuItemStaticPatch::Drawer(bool selected)
 
 	int x = mXpos;
 	FTexture *tex = TexMan(mTexture);
-	if (mYpos >= 0)
+
+	if(mResW != 0 && mResH != 0)//[GEC]
 	{
-		if (mCentered) x -= tex->GetScaledWidth()/2;
-		screen->DrawTexture (tex, x, mYpos, DTA_Clean, true, TAG_DONE);
+		if(mCentered) x -= tex->GetScaledWidth()/2;
+
+		screen->DrawTexture (tex, x, mYpos,
+		DTA_Bottom320x200, false,// activate virtBottom
+		DTA_VirtualWidthF, (double)mResW,
+		DTA_VirtualHeightF, (double)mResH,
+		DTA_Alpha, MenuAlpha,
+		TAG_DONE);//[GEC]
 	}
 	else
 	{
-		int x = (mXpos - 160) * CleanXfac + (SCREENWIDTH>>1);
-		if (mCentered) x -= (tex->GetScaledWidth()*CleanXfac)/2;
-		screen->DrawTexture (tex, x, -mYpos*CleanYfac, DTA_CleanNoMove, true, TAG_DONE);
+		if (mYpos >= 0)
+		{
+			if (mCentered) x -= tex->GetScaledWidth()/2;
+			screen->DrawTexture (tex, x, mYpos, DTA_Clean, true, DTA_Alpha, MenuAlpha, TAG_DONE);//[GEC]
+		}
+		else
+		{
+			int x = (mXpos - 160) * CleanXfac + (SCREENWIDTH>>1);
+			if (mCentered) x -= (tex->GetScaledWidth()*CleanXfac)/2;
+			screen->DrawTexture (tex, x, -mYpos*CleanYfac, DTA_CleanNoMove, true, DTA_Alpha, MenuAlpha, TAG_DONE);//[GEC]
+		}
 	}
 }
 
@@ -411,13 +531,15 @@ void FListMenuItemStaticPatch::Drawer(bool selected)
 //
 //=============================================================================
 
-FListMenuItemStaticText::FListMenuItemStaticText(int x, int y, const char *text, FFont *font, EColorRange color, bool centered)
+FListMenuItemStaticText::FListMenuItemStaticText(int x, int y, const char *text, FFont *font, EColorRange color, bool centered, int resw, int resh)//[GEC]
 : FListMenuItem(x, y)
 {
 	mText = ncopystring(text);
 	mFont = font;
 	mColor = color;
 	mCentered = centered;
+	mResW = resw;//[GEC]
+	mResH = resh;//[GEC]
 }
 	
 void FListMenuItemStaticText::Drawer(bool selected)
@@ -426,17 +548,31 @@ void FListMenuItemStaticText::Drawer(bool selected)
 	if (text != NULL)
 	{
 		if (*text == '$') text = GStrings(text+1);
-		if (mYpos >= 0)
+
+		if(mResW != 0 && mResH != 0)//[GEC]
 		{
 			int x = mXpos;
 			if (mCentered) x -= mFont->StringWidth(text)/2;
-			screen->DrawText(mFont, mColor, x, mYpos, text, DTA_Clean, true, TAG_DONE);
+			screen->DrawText(mFont, mColor, x, mYpos, text,
+			DTA_ResWidthF, mResW,
+			DTA_ResHeightF, mResH,
+			DTA_Alpha, MenuAlpha,
+			TAG_DONE);//[GEC]
 		}
 		else
 		{
-			int x = (mXpos - 160) * CleanXfac + (SCREENWIDTH>>1);
-			if (mCentered) x -= (mFont->StringWidth(text)*CleanXfac)/2;
-			screen->DrawText (mFont, mColor, x, -mYpos*CleanYfac, text, DTA_CleanNoMove, true, TAG_DONE);
+			if (mYpos >= 0)
+			{
+				int x = mXpos;
+				if (mCentered) x -= mFont->StringWidth(text)/2;
+				screen->DrawText(mFont, mColor, x, mYpos, text, DTA_Clean, true, DTA_Alpha, MenuAlpha, TAG_DONE);//[GEC]
+			}
+			else
+			{
+				int x = (mXpos - 160) * CleanXfac + (SCREENWIDTH>>1);
+				if (mCentered) x -= (mFont->StringWidth(text)*CleanXfac)/2;
+				screen->DrawText (mFont, mColor, x, -mYpos*CleanYfac, text, DTA_CleanNoMove, true, DTA_Alpha, MenuAlpha, TAG_DONE);//[GEC]
+			}
 		}
 	}
 }
@@ -505,7 +641,7 @@ bool FListMenuItemSelectable::MouseEvent(int type, int x, int y)
 //
 //=============================================================================
 
-FListMenuItemText::FListMenuItemText(int x, int y, int height, int hotkey, const char *text, FFont *font, EColorRange color, EColorRange color2, FName child, int param)
+FListMenuItemText::FListMenuItemText(int x, int y, int height, int hotkey, const char *text, FFont *font, EColorRange color, EColorRange color2, FName child, int param, int resw, int resh)//[GEC]
 : FListMenuItemSelectable(x, y, height, child, param)
 {
 	mText = ncopystring(text);
@@ -513,6 +649,8 @@ FListMenuItemText::FListMenuItemText(int x, int y, int height, int hotkey, const
 	mColor = color;
 	mColorSelected = color2;
 	mHotkey = hotkey;
+	mResW = resw;//[GEC]
+	mResH = resh;//[GEC]
 }
 
 FListMenuItemText::~FListMenuItemText()
@@ -529,7 +667,16 @@ void FListMenuItemText::Drawer(bool selected)
 	if (text != NULL)
 	{
 		if (*text == '$') text = GStrings(text+1);
-		screen->DrawText(mFont, selected ? mColorSelected : mColor, mXpos, mYpos, text, DTA_Clean, true, TAG_DONE);
+
+		if(mResW != 0 && mResH != 0)//[GEC]
+		{
+			screen->DrawText(mFont, selected ? mColorSelected : mColor, mXpos, mYpos, text, 
+			DTA_ResWidthF, mResW,
+			DTA_ResHeightF, mResH,
+			DTA_Alpha, MenuAlpha, TAG_DONE);//[GEC]
+		}
+		else
+			screen->DrawText(mFont, selected ? mColorSelected : mColor, mXpos, mYpos, text, DTA_Clean, true, DTA_Alpha, MenuAlpha, TAG_DONE);//[GEC]
 	}
 }
 
@@ -551,16 +698,27 @@ int FListMenuItemText::GetWidth()
 //
 //=============================================================================
 
-FListMenuItemPatch::FListMenuItemPatch(int x, int y, int height, int hotkey, FTextureID patch, FName child, int param)
+FListMenuItemPatch::FListMenuItemPatch(int x, int y, int height, int hotkey, FTextureID patch, FName child, int param, int resw, int resh)//[GEC]
 : FListMenuItemSelectable(x, y, height, child, param)
 {
 	mHotkey = hotkey;
 	mTexture = patch;
+	mResW = resw;//[GEC]
+	mResH = resh;//[GEC]
 }
 
 void FListMenuItemPatch::Drawer(bool selected)
 {
-	screen->DrawTexture (TexMan(mTexture), mXpos, mYpos, DTA_Clean, true, TAG_DONE);
+	if(mResW != 0 && mResH != 0)//[GEC]
+	{
+		screen->DrawTexture (TexMan(mTexture), mXpos, mYpos,
+		DTA_Bottom320x200, false,// activate virtBottom
+		DTA_VirtualWidthF, (double)mResW,
+		DTA_VirtualHeightF, (double)mResH,
+		DTA_Alpha, MenuAlpha, TAG_DONE);//[GEC]
+	}
+	else
+		screen->DrawTexture (TexMan(mTexture), mXpos, mYpos, DTA_Clean, true, DTA_Alpha, MenuAlpha, TAG_DONE);//[GEC]
 }
 
 int FListMenuItemPatch::GetWidth() 
@@ -570,3 +728,182 @@ int FListMenuItemPatch::GetWidth()
 		: 0;
 }
 
+//=============================================================================
+//
+// text item
+//
+//=============================================================================
+
+FListMenuItemText2::FListMenuItemText2(int type, int x, int y, int height, int hotkey, const char *text, FFont *font, EColorRange color, EColorRange color2, FName child, int param, int resw, int resh)//[GEC]
+: FListMenuItemSelectable(x, y, height, child, param)
+{
+	mText = ncopystring(text);
+	mFont = font;
+	mColor = color;
+	mColorSelected = color2;
+	mHotkey = hotkey;
+	mResW = resw;//[GEC]
+	mResH = resh;//[GEC]
+	mType = type;//[GEC]
+
+	/*const char *PlayerClass;
+	int Episode;
+	int Skill;*/
+
+	mMinrange = 0;
+	if(mType == 0)//Player
+	{
+		mSelection = M_GetDefaultSkill();
+		mMaxrange = AllSkills.Size()-1;
+	}
+	else if(mType == 1)//Episode
+	{
+		mSelection = 0;
+		mMaxrange = AllEpisodes.Size()-1;
+	}
+	else if(mType == 2)//Skill
+	{
+		mSelection = M_GetDefaultSkill();
+
+		if(GameStartupInfo.Skill != -1)
+			mSelection = GameStartupInfo.Skill;
+
+		mMaxrange = AllSkills.Size()-1;
+	}
+	mStep = 1;
+
+	ResetSelection(true);
+}
+
+FListMenuItemText2::~FListMenuItemText2()
+{
+	if (mText != NULL)
+	{
+		delete [] mText;
+	}
+}
+
+void FListMenuItemText2::DrawSubText(const char *text, int x, int y, bool selected)
+{
+	if (text != NULL)
+	{
+		if (*text == '$') text = GStrings(text+1);
+
+		if(mResW != 0 && mResH != 0)//[GEC]
+		{
+			screen->DrawText(mFont, selected ? mColorSelected : mColor, x, y, text, 
+			DTA_ResWidthF, mResW,
+			DTA_ResHeightF, mResH,
+			DTA_Alpha, MenuAlpha, TAG_DONE);//[GEC]
+		}
+		else
+			screen->DrawText(mFont, selected ? mColorSelected : mColor, x, y, text, DTA_Clean, true, DTA_Alpha, MenuAlpha, TAG_DONE);//[GEC]
+	}
+}
+
+void FListMenuItemText2::ResetSelection(bool reset)
+{
+	if(reset)
+	{
+		if(mType == 0)//Player
+		{
+			mSelection = M_GetDefaultSkill();
+		}
+		else if(mType == 1)//Episode
+		{
+			mSelection = GameStartupInfo.Episode;
+		}
+		else if(mType == 2)//Skill
+		{
+			mSelection = M_GetDefaultSkill();//GameStartupInfo.Skill;
+		}
+	}
+}
+
+void FListMenuItemText2::Drawer(bool selected)
+{
+	//ResetSelection(MenuReset);
+
+	const char *text = mText;
+	if (text != NULL)
+	{
+		if (*text == '$') text = GStrings(text+1);
+
+		if(mResW != 0 && mResH != 0)//[GEC]
+		{
+			screen->DrawText(mFont, selected ? mColorSelected : mColor, mXpos, mYpos, text, 
+			DTA_ResWidthF, mResW,
+			DTA_ResHeightF, mResH,
+			DTA_Alpha, MenuAlpha, TAG_DONE);//[GEC]
+		}
+		else
+			screen->DrawText(mFont, selected ? mColorSelected : mColor, mXpos, mYpos, text, DTA_Clean, true, DTA_Alpha, MenuAlpha, TAG_DONE);//[GEC]
+	}
+
+	if(mType == 1)//Episode
+	{
+		GameStartupInfo.Episode = mSelection;
+		DrawSubText(AllEpisodes[mSelection].mEpisodeName, mXpos+20, mYpos+20, selected);
+	}
+	if(mType == 2)//Skill
+	{
+		GameStartupInfo.Skill = mSelection;
+		DrawSubText(AllSkills[mSelection].MenuName, mXpos+20, mYpos+20, selected);
+	}
+
+	//ResetSelection(MenuReset);
+}
+
+int FListMenuItemText2::GetWidth() 
+{ 
+	const char *text = mText;
+	if (text != NULL)
+	{
+		if (*text == '$') text = GStrings(text+1);
+		return mFont->StringWidth(text); 
+	}
+	return 1;
+}
+
+bool FListMenuItemText2::MouseEvent(int type, int x, int y)
+{
+	//Printf("MouseEven\n");
+	return true;
+}
+
+bool FListMenuItemText2::MenuEvent (int mkey, bool fromcontroller)
+{
+	//Printf("MenuEvent\n");
+	switch (mkey)
+	{
+		case MKEY_Left:
+			{
+				MenuReset = false;
+				if(mSelection  > mMinrange)
+					S_Sound (CHAN_VOICE | CHAN_UI, "menu/clear", snd_menuvolume, ATTN_NONE);
+
+				if ((mSelection -= mStep) < mMinrange) mSelection = mMinrange;
+				return true;
+			}
+			break;
+
+		case MKEY_Right:
+			{
+				MenuReset = false;
+				if(mSelection  < mMaxrange)
+					S_Sound (CHAN_VOICE | CHAN_UI, "menu/clear", snd_menuvolume, ATTN_NONE);
+
+				if ((mSelection += mStep) > mMaxrange) mSelection = mMaxrange;
+				return true;
+			}
+			break;
+	}
+	
+	return false;
+}
+
+bool FListMenuItemText2::Activate()
+{
+	MenuReset = true;
+	return FListMenuItemSelectable::Activate();
+}

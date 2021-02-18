@@ -160,6 +160,16 @@ bool P_Teleport (AActor *thing, fixed_t x, fixed_t y, fixed_t z, angle_t angle, 
 			z = floorheight;
 		}
 	}
+
+	// no use teleporting if the thing has no room
+	if(gameinfo.teleportcheckheight)//[GEC] Esta en Doom64
+	{
+		if(thing->ceilingz - thing->floorz < thing->height)
+		{
+			return false;
+		}
+	}
+
 	if (!P_TeleportMove (thing, x, y, z, false))
 	{
 		return false;
@@ -183,6 +193,10 @@ bool P_Teleport (AActor *thing, fixed_t x, fixed_t y, fixed_t z, angle_t angle, 
 	// Spawn teleport fog at source and destination
 	if ((flags & TELF_SOURCEFOG) && !predicting)
 	{
+		if(gameinfo.telefogbyheight)//[GEC]
+		{
+			old.z = old.z + (thing->height >> 1);
+		}
 		P_SpawnTeleportFog(thing, old, true, true); //Passes the actor through which then pulls the TeleFog metadata types based on properties.
 	}
 	if (flags & TELF_DESTFOG)
@@ -191,7 +205,15 @@ bool P_Teleport (AActor *thing, fixed_t x, fixed_t y, fixed_t z, angle_t angle, 
 		{
 			fixed_t fogDelta = thing->flags & MF_MISSILE ? 0 : TELEFOGHEIGHT;
 			an = angle >> ANGLETOFINESHIFT;
-			P_SpawnTeleportFog(thing, x + 20 * finecosine[an], y + 20 * finesine[an], thing->Z() + fogDelta, false, true);
+
+			fixed_t fogZ = thing->Z() + fogDelta;
+
+			if(gameinfo.telefogbyheight)//[GEC]
+			{
+				fogZ = thing->Z() + (thing->height >> 1);
+			}
+
+			P_SpawnTeleportFog(thing, x + 20 * finecosine[an], y + 20 * finesine[an], fogZ, false, true);
 
 		}
 		if (thing->player)

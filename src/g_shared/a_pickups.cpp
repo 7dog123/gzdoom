@@ -1017,7 +1017,21 @@ void AInventory::Touch (AActor *toucher)
 			PlayPickupSound (player->mo);
 			if (!(ItemFlags & IF_NOSCREENFLASH))
 			{
-				player->bonuscount = BONUSADD;
+				int bonus_add = BONUSADD;
+				//if(ticratemode != 0)
+				if(gameinfo.ticrate30)
+				{
+					bonus_add = BONUSADD-2;
+				}
+
+				if ((ItemFlags & IF_CLASSICFLASH))	// [GEC] Set original aumento de flash pickup
+				{
+					player->bonuscount += bonus_add;
+				}
+				else
+				{
+					player->bonuscount = bonus_add;
+				}
 			}
 		}
 		else
@@ -1117,7 +1131,7 @@ void AInventory::PlayPickupSound (AActor *toucher)
 	{
 		chan = CHAN_PICKUP;
 	}
-	S_Sound (toucher, chan, PickupSound, 1, atten);
+	S_Sound (toucher, chan, PickupSound, 1, atten, true);//[GEC] En PSX Doom los pikups siempre hacen reverberación.
 }
 
 //===========================================================================

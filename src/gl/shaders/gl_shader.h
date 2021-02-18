@@ -10,6 +10,78 @@ extern bool gl_shaderactive;
 const int VATTR_FOGPARAMS = 14;
 const int VATTR_LIGHTLEVEL = 13; // Korshun.
 
+//const int VATTR_LIGHTLEVEL64 = 12; // [GEC] lightlevel_64
+//const int VATTR_BLENDCOLOR = 11; // [GEC] blend color
+
+//==========================================================================
+//	From Gzdoom 3.0.1
+//==========================================================================
+class FBufferedUniform1i
+{
+	int mBuffer;
+	int mIndex;
+
+public:
+	void Init(GLuint hShader, const GLchar *name)
+	{
+		mIndex = glGetUniformLocation(hShader, name);
+		mBuffer = 0;
+	}
+
+	void Set(int newvalue)
+	{
+		if (newvalue != mBuffer)
+		{
+			mBuffer = newvalue;
+			glUniform1i(mIndex, newvalue);
+		}
+	}
+};
+
+class FBufferedUniform1f
+{
+	float mBuffer;
+	int mIndex;
+
+public:
+	void Init(GLuint hShader, const GLchar *name)
+	{
+		mIndex = glGetUniformLocation(hShader, name);
+		mBuffer = 0;
+	}
+
+	void Set(float newvalue)
+	{
+		if (newvalue != mBuffer)
+		{
+			mBuffer = newvalue;
+			glUniform1f(mIndex, newvalue);
+		}
+	}
+};
+
+class FBufferedUniformPE
+{
+	PalEntry mBuffer;
+	int mIndex;
+
+public:
+	void Init(GLuint hShader, const GLchar *name)
+	{
+		mIndex = glGetUniformLocation(hShader, name);
+		mBuffer = 0;
+	}
+
+	void Set(PalEntry newvalue)
+	{
+		if (newvalue != mBuffer)
+		{
+			mBuffer = newvalue;
+			glUniform4f(mIndex, newvalue.r/255.f, newvalue.g/255.f, newvalue.b/255.f, newvalue.a/255.f);
+		}
+	}
+};
+
 //==========================================================================
 //
 //
@@ -23,6 +95,18 @@ class FShader
 	unsigned int hShader;
 	unsigned int hVertProg;
 	unsigned int hFragProg;
+
+	FBufferedUniform1i muPalLightLevels;//[GEC] Shader
+	FBufferedUniform1i muSoftLightPsx;//[GEC] Shader
+	FBufferedUniform1i muSetLightMode;//[GEC] Shader
+	FBufferedUniform1f muPsxBrightLevel;//[GEC] Shader
+	FBufferedUniform1f muLight64;//[GEC] Shader
+	FBufferedUniformPE muBlendColor;//[GEC] Shader
+	FBufferedUniform1i muBlendMode;//[GEC] Shader
+	FBufferedUniform1i muFadeLinear;//[GEC] Shader
+	FBufferedUniform1i muPsxColor;//[GEC] Shader
+	FBufferedUniform1i muWrapS;//[GEC] Shader
+	FBufferedUniform1i muWrapT;//[GEC] Shader
 
 	int timer_index;
 	int desaturation_index;

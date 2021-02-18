@@ -77,6 +77,9 @@ const int SXF_TRANSFERROLL =			1 << 25;
 const int SXF_ISTARGET				=	1 << 26;
 const int SXF_ISMASTER				=	1 << 27;
 const int SXF_ISTRACER				=	1 << 28;
+const int SIXF_TRANSFERLASTHEARD		=	1 << 29; //[GEC] Nuevo Flag
+const int SIXF_TRANSFERNOINFIGHTINGFLAG		=	1 << 30; //[GEC] Nuevo Flag
+const int SIXF_TRANSFERCOUNTSECRET		=	1 << 31; //[GEC] Nuevo Flag
 
 // Flags for A_Chase
 const int CHF_FASTCHASE = 1;
@@ -466,7 +469,9 @@ enum
 enum
 {
 	FTF_REMOVE =	1 << 0,
-	FTF_CLAMP =		1 << 1,
+	FTF_CLAMP =	1 << 1,
+	FTF_D64FADE =		1 << 2, //[GEC]
+	FTF_D64FLAGRESERVE =	1 << 3, //[GEC]
 };
 
 // Flags for A_Face*

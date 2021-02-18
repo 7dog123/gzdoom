@@ -616,3 +616,48 @@ xx(MoveBob)
 xx(StillBob)
 xx(PlayerClass)
 xx(Wi_NoAutostartMap)
+
+// [D64] stuff [GEC]
+xx(Peg_Upper_Wall_Color)
+xx(Peg_Lower_Wall_Color)
+xx(Flip_Upper_Pegged_Color)
+xx(Uv_Wrap_H_Mirror)
+xx(Uv_Wrap_V_Mirror)
+xx(Scroll_Right)
+xx(Scroll_Left)
+xx(Scroll_Up)
+xx(Scroll_Down)
+xx(Color_Floor)//Floor_Color
+xx(Color_Ceiling)//Ceiling_Color
+xx(Color_Walltop)//Top_Half_Wall_Color
+xx(Color_Wallbottom)//Bottom_Half_Wall_Color
+xx(Color_Sprites)//Sprite_Color
+xx(Use_Multicolors)
+xx(LiquidFloor)
+xx(Sync_Specials)
+xx(Set_Ceiling_Scroll)
+xx(Set_Floor_Scroll)
+xx(Toggle_Fast_Scroolling)
+xx(Sky_Hack_Console)
+xx(No_Occlusion)
+xx(EnableAlphaTest)
+xx(No_RenderMidTex)
+xx(Dont_Peg_Middle)// [GEC] Nuevo middle texture unpegged
+xx(Switchx02)
+xx(Switchx04)
+xx(Switchx08)
+xx(CheckFloorHgt)
+
+xx(Lightlevel2)
+xx(No_Infighting)
+xx(Vertical_Door)
+xx(Light_Effect)
+xx(Gamemenu)
+xx(StartTitle)
+xx(NoSwitchAnimate)
+xx(EnvironmentSector)
+xx(Reverb_Off)
+//para breserk
+xx(Psx)
+xx(D64)
+// [D64] stuff [GEC]

@@ -61,6 +61,8 @@
 #include "gl/renderer/gl_renderstate.h"
 #include "gl/data/gl_data.h"
 
+#include "gl/textures/gl_combiners.h"//[GEC]
+
 
 //===========================================================================
 //
@@ -519,6 +521,8 @@ void FVoxelModel::RenderFrame(FTexture * skin, int frame, int cm, int translatio
 	FMaterial * tex = FMaterial::ValidateTexture(skin);
 	tex->Bind(cm, 0, translation);
 	gl_RenderState.Apply();
+
+	SetNewSpecials(tex, cm, false, false);//[GEC]
 
 	if (mVBO == NULL) MakeGLData();
 	if (mVBO != NULL)

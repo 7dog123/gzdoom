@@ -57,6 +57,7 @@
 #include "gl/utility/gl_templates.h"
 #include "gl/shaders/gl_shader.h"
 #include "gl/stereo3d/scoped_color_mask.h"
+#include "gl/textures/gl_combiners.h"//[GEC]
 
 FDrawInfo * gl_drawinfo;
 
@@ -328,6 +329,30 @@ void GLDrawList::SortWallIntoPlane(SortNode * head,SortNode * sort)
 		ws=&walls[drawitems[sort->itemindex].index];	// may have been reallocated!
 		float newtexv = ws->uplft.v + ((ws->lolft.v - ws->uplft.v) / (ws->zbottom[0] - ws->ztop[0])) * (fh->z - ws->ztop[0]);
 
+		//-----[GEC]_STUFF-----STR//
+		float up_lft_r = ws->Wallcolor[1].r / 255.f;
+		float up_lft_g = ws->Wallcolor[1].g / 255.f;
+		float up_lft_b = ws->Wallcolor[1].b / 255.f;
+		float lw_lft_r = ws->Wallcolor[0].r / 255.f;
+		float lw_lft_g = ws->Wallcolor[0].g / 255.f;
+		float lw_lft_b = ws->Wallcolor[0].b / 255.f;
+
+		float up_rgt_r = ws->Wallcolor[2].r / 255.f;
+		float up_rgt_g = ws->Wallcolor[2].g / 255.f;
+		float up_rgt_b = ws->Wallcolor[2].b / 255.f;
+		float lw_rgt_r = ws->Wallcolor[3].r / 255.f;
+		float lw_rgt_g = ws->Wallcolor[3].g / 255.f;
+		float lw_rgt_b = ws->Wallcolor[3].b / 255.f;
+
+		float lftR = up_lft_r + ((lw_lft_r - up_lft_r) / (ws->zbottom[0] - ws->ztop[0])) * (fh->z - ws->ztop[0]);
+		float lftG = up_lft_g + ((lw_lft_g - up_lft_g) / (ws->zbottom[0] - ws->ztop[0])) * (fh->z - ws->ztop[0]);
+		float lftB = up_lft_b + ((lw_lft_b - up_lft_b) / (ws->zbottom[0] - ws->ztop[0])) * (fh->z - ws->ztop[0]);
+
+		float rgtR = up_rgt_r + ((lw_rgt_r - up_rgt_r) / (ws->zbottom[1] - ws->ztop[1])) * (fh->z - ws->ztop[1]);
+		float rgtG = up_rgt_g + ((lw_rgt_g - up_rgt_g) / (ws->zbottom[1] - ws->ztop[1])) * (fh->z - ws->ztop[1]);
+		float rgtB = up_rgt_b + ((lw_rgt_b - up_rgt_b) / (ws->zbottom[1] - ws->ztop[1])) * (fh->z - ws->ztop[1]);
+		//-----[GEC]_STUFF-----END//
+
 		// I make the very big assumption here that translucent walls in sloped sectors
 		// and 3D-floors never coexist in the same level. If that were the case this
 		// code would become extremely more complicated.
@@ -335,11 +360,27 @@ void GLDrawList::SortWallIntoPlane(SortNode * head,SortNode * sort)
 		{
 			ws->ztop[1] = ws1->zbottom[1] = ws->ztop[0] = ws1->zbottom[0] = fh->z;
 			ws->uprgt.v = ws1->lorgt.v = ws->uplft.v = ws1->lolft.v = newtexv;
+
+			//-----[GEC]_STUFF-----STR//
+			ws->Wallcolor[1] = PalEntry(lftR * 255, lftG * 255, lftB * 255);
+			ws->Wallcolor[2] = PalEntry(rgtR * 255, rgtG * 255, rgtB * 255);
+
+			ws1->Wallcolor[0] = PalEntry(lftR * 255, lftG * 255, lftB * 255);
+			ws1->Wallcolor[3] = PalEntry(rgtR * 255, rgtG * 255, rgtB * 255);
+			//-----[GEC]_STUFF-----END//
 		}
 		else
 		{
 			ws1->ztop[1] = ws->zbottom[1] = ws1->ztop[0] = ws->zbottom[0] = fh->z;
 			ws1->uplft.v = ws->lolft.v = ws1->uprgt.v = ws->lorgt.v=newtexv;
+
+			//-----[GEC]_STUFF-----STR//
+			ws1->Wallcolor[1] = PalEntry(lftR * 255, lftG * 255, lftB * 255);
+			ws1->Wallcolor[2] = PalEntry(rgtR * 255, rgtG * 255, rgtB * 255);
+
+			ws->Wallcolor[0] = PalEntry(lftR * 255, lftG * 255, lftB * 255);
+			ws->Wallcolor[3] = PalEntry(rgtR * 255, rgtG * 255, rgtB * 255);
+			//-----[GEC]_STUFF-----END//
 		}
 
 		SortNode * sort2=SortNodes.GetNew();
@@ -529,6 +570,7 @@ void GLDrawList::SortSpriteIntoWall(SortNode * head,SortNode * sort)
 		float ix=(float)(ss->x1 + r * (ss->x2-ss->x1));
 		float iy=(float)(ss->y1 + r * (ss->y2-ss->y1));
 		float iu=(float)(ss->ul + r * (ss->ur-ss->ul));
+		float iz = (float)(ss->z1 + r * (ss->z2 - ss->z1));//[GEC]
 
 		GLSprite s=*ss;
 		AddSprite(&s);
@@ -538,6 +580,9 @@ void GLDrawList::SortSpriteIntoWall(SortNode * head,SortNode * sort)
 		ss1->x1=ss->x2=ix;
 		ss1->y1=ss->y2=iy;
 		ss1->ul=ss->ur=iu;
+
+		if(ss->RenderLaser)//[GEC]
+			ss1->z1=ss->z2=iz;
 
 		SortNode * sort2=SortNodes.GetNew();
 		memset(sort2,0,sizeof(SortNode));
@@ -1041,6 +1086,11 @@ void FDrawInfo::ClearFloodStencil(wallseg * ws)
 //==========================================================================
 void FDrawInfo::DrawFloodedPlane(wallseg * ws, float planez, sector_t * sec, bool ceiling)
 {
+	int texturemode;//[GEC]
+	float DynCol[3] = {0.0, 0.0, 0.0};//[GEC]
+	float FragCol[4] = {1.0, 1.0, 1.0, 1.0};//[GEC]
+	gl_RenderState.ResetSpecials();//[GEC]
+
 	GLSectorPlane plane;
 	int lightlevel;
 	FColormap Colormap;
@@ -1067,10 +1117,21 @@ void FDrawInfo::DrawFloodedPlane(wallseg * ws, float planez, sector_t * sec, boo
 		else lightlevel=abs(ceiling? sec->GetCeilingLight() : sec->GetFloorLight());
 	}
 
+	if(ceiling)
+		Colormap.LightColorMul(sec->SpecialColors[sector_t::ceiling]);//[GEC]
+	else
+		Colormap.LightColorMul(sec->SpecialColors[sector_t::floor]);//[GEC]
+
 	int rel = getExtraLight();
 	gl_SetColor(lightlevel, rel, &Colormap, 1.0f);
 	gl_SetFog(lightlevel, rel, &Colormap, false);
 	gltexture->Bind(Colormap.colormap);
+
+	//[GEC]
+	gl_RenderState.GetTextureMode(&texturemode);//Get TextureMode
+	gl_RenderState.GetFragColor(&FragCol[0], &FragCol[1], &FragCol[2], &FragCol[3]);//Get FragColor
+	SetInitSpecials(texturemode, glset.lightmode, lightlevel, rel, sec->lightlevel_64, false, FragCol, DynCol);
+	SetNewSpecials(gltexture, Colormap.colormap, false, false, true);//[GEC]
 
 	float fviewx = FIXED2FLOAT(viewx);
 	float fviewy = FIXED2FLOAT(viewy);
@@ -1115,6 +1176,10 @@ void FDrawInfo::DrawFloodedPlane(wallseg * ws, float planez, sector_t * sec, boo
 		glPopMatrix();
 		glMatrixMode(GL_MODELVIEW);
 	}
+
+	//[GEC] Reset default
+	Disable_texunits();
+	gl_RenderState.SetTextureMode(texturemode);
 }
 
 //==========================================================================

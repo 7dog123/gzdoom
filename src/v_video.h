@@ -122,6 +122,11 @@ enum
 	DTA_TextLen,		// stop after this many characters, even if \0 not hit
 	DTA_CellX,			// horizontal size of character cell
 	DTA_CellY,			// vertical size of character cell
+
+	DTA_ResWidthF,		// [GEC]
+	DTA_ResHeightF,		// [GEC]
+	DTA_GLCOLOR,		// [GEC] color
+	DTA_DrawFire,		// [GEC] draw fire
 };
 
 enum
@@ -253,6 +258,9 @@ public:
 		FRenderStyle style;
 		struct FSpecialColormap *specialcolormap;
 		struct FColormapStyle *colormapstyle;
+
+		uint32 color;//[GEC]
+		INTBOOL firepsx;//[GEC]
 	};
 
 protected:

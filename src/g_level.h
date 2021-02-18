@@ -110,6 +110,8 @@ struct FMapInfoParser
 	void ParseAMColors(bool);
 	FName CheckEndSequence();
 	FName ParseEndGame();
+
+	void ParseStatScreen();//[GEC]
 };
 
 #define DEFINE_MAP_OPTION(name, old) \
@@ -286,6 +288,16 @@ struct level_info_t
 	FString		BorderTexture;
 	FString		MapBackground;
 
+	FString		SkyFlatName;//[GEC]
+	int			ExitDelay;//[GEC]
+	bool		FadeInBrightness;
+	bool		NoAlphaMask;//[GEC]
+	bool		ForceGodMode;//[GEC]
+	bool		ClearChts;//[GEC]
+	bool		FadeLinear;//[GEC]
+	bool		ContinueMusicOnExit;//[GEC]
+	bool		ClearMessages;//[GEC]
+
 	int			cluster;
 	int			partime;
 	int			sucktime;
@@ -437,6 +449,15 @@ struct FLevelLocals
 	int			airsupply;
 	int			DefaultEnvironment;		// Default sound environment.
 
+	FString		SkyFlatName;//[GEC]
+	int			ExitDelay;				// [GEC] Default ExitDelay.
+	bool		FadeInBrightness;		// [GEC] Default LightFadeIn.
+	bool		NoAlphaMask;			// [GEC] No Alpha Mask on Solid Walls
+	bool		ClearChts;				// [GEC]
+	bool		FadeLinear;				// [GEC]
+	bool		ContinueMusicOnExit;	// [GEC]
+	bool		ClearMessages;//[GEC]
+
 	TObjPtr<class ASkyViewpoint> DefaultSkybox;
 
 	FSectorScrollValues	*Scrolls;		// NULL if no DScrollers in this level
@@ -467,6 +488,29 @@ struct cluster_info_t
 	FString		ClusterName;
 	unsigned int cdid;
 
+	// [GEC]
+	bool		TextAdd;				//TextAdd
+	int			TextSpeed;				//TextSpeed
+	int			TextDelay;				//TextDelay
+	int			TextResW, TextResH;		//ResolutionText
+	int			TextX, TextY;			//TextPosition
+	int			PicResW, PicResH;		//ResolutionPic
+	int			PicX, PicY;				//PicPosition
+	bool		CenterText;				//CenterText
+	bool		FadeText;				//FadeTex
+	bool		PlainText;				//PlainText
+	bool		PlainSync;				//PlainSync
+	bool		ScrollText;				//ScrollText
+	int			ScrollTextSpeed;		//ScrollTextSpeed
+	int			ScrollTextDirection;	//ScrollTextDirection
+	int			ScrollTextTime;			//ScrollTextTime
+	int			RowPadding;				//RowPadding
+	FName		FontName;				//FontName
+	gamestate_t	WipeOut;				//WipeOut
+	bool		NoSkip;					//Noskip
+	bool		AutoSkip;				//AutoSkip
+	FName		NextMusic;				//NextMusic
+
 	void Reset();
 
 };
@@ -480,6 +524,7 @@ struct cluster_info_t
 #define CLUSTER_LOOKUPENTERTEXT	0x00000020	// Enter text is the name of a language string
 #define CLUSTER_LOOKUPNAME		0x00000040	// Name is the name of a language string
 #define CLUSTER_LOOKUPCLUSTERNAME 0x00000080	// Cluster name is the name of a language string
+#define CLUSTER_NOINTERMISSION 0x00000100	// [GEC]
 
 extern FLevelLocals level;
 
@@ -502,6 +547,7 @@ void G_DeferedInitNew (FGameStartup *gs);
 
 void G_ExitLevel (int position, bool keepFacing);
 void G_SecretExitLevel (int position);
+void G_TeleportNewMap (const char *levelname, int position, int flags);//[GEC]
 const char *G_GetExitMap();
 const char *G_GetSecretExitMap();
 

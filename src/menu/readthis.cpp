@@ -124,7 +124,7 @@ bool DReadThisMenu::MenuEvent(int mkey, bool fromcontroller)
 		mInfoTic = gametic;
 		if ((level.info != NULL && level.info->F1Pic.Len() != 0) || mScreen > int(gameinfo.infoPages.Size()))
 		{
-			Close();
+			Close(true);//[GEC]
 		}
 		return true;
 	}

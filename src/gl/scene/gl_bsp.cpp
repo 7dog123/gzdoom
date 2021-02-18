@@ -142,7 +142,8 @@ static void AddLine (seg_t *seg)
 
 	if (!seg->backsector)
 	{
-		clipper.SafeAddClipRange(startAngle, endAngle);
+		//clipper.SafeAddClipRange(startAngle, endAngle);
+		if(!(seg->linedef->gecflags & ML_NO_OCCLUSION)){clipper.SafeAddClipRange(startAngle, endAngle);}//[GEC]
 	}
 	else if (!(seg->sidedef->Flags & WALLF_POLYOBJ))	// Two-sided polyobjects never obstruct the view
 	{
@@ -166,7 +167,8 @@ static void AddLine (seg_t *seg)
 
 			if (gl_CheckClip(seg->sidedef, currentsector, backsector))
 			{
-				clipper.SafeAddClipRange(startAngle, endAngle);
+				//clipper.SafeAddClipRange(startAngle, endAngle);
+				if(!(seg->linedef->gecflags & ML_NO_OCCLUSION)){clipper.SafeAddClipRange(startAngle, endAngle);}//[GEC]
 			}
 		}
 	}

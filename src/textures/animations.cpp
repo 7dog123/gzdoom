@@ -557,14 +557,19 @@ void FTextureManager::ParseTime (FScanner &sc, DWORD &min, DWORD &max)
 	if (sc.Compare ("tics"))
 	{
 		sc.MustGetFloat ();
-		min = max = DWORD(sc.Float * 1000 / 35);
+		//min = max = DWORD(sc.Float * 1000 / 35);
+		min = max = DWORD(sc.Float * 1000 / TICRATE);//[GEC]//35);	Use ticrate
 	}
 	else if (sc.Compare ("rand"))
 	{
-		sc.MustGetFloat ();
+		/*sc.MustGetFloat ();
 		min = DWORD(sc.Float * 1000 / 35);
 		sc.MustGetFloat ();
-		max = DWORD(sc.Float * 1000 / 35);
+		max = DWORD(sc.Float * 1000 / 35);*/
+		sc.MustGetFloat ();
+		min = DWORD(sc.Float * 1000 / TICRATE);//[GEC]//35);35);	Use ticrate
+		sc.MustGetFloat ();
+		max = DWORD(sc.Float * 1000 / TICRATE);//[GEC]//35);35);	Use ticrate
 	}
 	else
 	{
@@ -983,6 +988,21 @@ void FTextureManager::UpdateAnimations (DWORD mstime)
 				SetTranslation (anim->BasePic + i, anim->BasePic + (i + anim->CurFrame) % anim->NumFrames);
 			}
 		}
+	}
+}
+
+//==========================================================================
+//
+// FTextureManager :: ResetAnimations  //[GEC]
+//
+//==========================================================================
+
+void FTextureManager::ResetAnimations ()
+{
+	for (unsigned int j = 0; j < mAnimations.Size(); ++j)
+	{
+		FAnimDef *anim = mAnimations[j];
+		anim->CurFrame = 0;
 	}
 }
 

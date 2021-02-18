@@ -52,6 +52,17 @@ RenderContext gl;
 
 int occlusion_type=0;
 
+#include "c_cvars.h"
+
+//CUSTOM_CVAR(Int,gl_shadermodel,0,CVAR_ARCHIVE/*|CVAR_NOINITCALL*/)
+CUSTOM_CVAR (Int, gl_shadermodel, 0, CVAR_ARCHIVE | CVAR_GLOBALCONFIG | CVAR_NOINITCALL)
+{
+	if(self != 0)
+	{
+		gl.shadermodel = clamp<int>(self, 0, 4);
+		Printf("You must restart GZDOOM to Force Shader\n");
+	}
+}
 
 //==========================================================================
 //
@@ -177,6 +188,22 @@ void gl_LoadExtensions()
 		gl.flags|=RFL_FRAMEBUFFER;
 	}
 
+	/*if(gl_force_shader)//[GEC]
+	{
+		gl.shadermodel = 4;
+		gl.flags|=RFL_MAP_BUFFER_RANGE;
+		gl.flags|=RFL_FRAMEBUFFER;
+	}*/
+	/*gl.shadermodel = 4;
+	gl.flags|=RFL_MAP_BUFFER_RANGE;
+	gl.flags|=RFL_FRAMEBUFFER;*/
+
+	if(gl_shadermodel != 0)//[GEC]
+	{
+		gl.shadermodel = gl_shadermodel;
+	}
+
+	//Printf("GL. Shader Model: %d\n", gl.shadermodel);
 }
 
 //==========================================================================

@@ -422,9 +422,16 @@ bool P_TeleportMove(AActor *thing, fixed_t x, fixed_t y, fixed_t z, bool telefra
 		if (!(th->flags & MF_SHOOTABLE))
 			continue;
 
+		if(thing->player != NULL && (thing->player->mo->PlayerFlags & PPF_AUTOTELEFRAG)) // [GEC] Psx & D64 PlayerAutoTeleFrag
+		{
+			goto skip;
+		}
+
 		// don't clip against self
 		if (th == thing)
 			continue;
+
+		skip://[GEC] Skip check
 
 		fixed_t blockdist = th->radius + tmf.thing->radius;
 		if (abs(th->X() - tmf.x) >= blockdist || abs(th->Y() - tmf.y) >= blockdist)
@@ -1002,6 +1009,21 @@ static bool CanAttackHurt(AActor *victim, AActor *shooter)
 					// [RH] Don't hurt monsters that hate the same victim as you do
 					return false;
 				}
+
+				if (victim->GetClass() == shooter->GetClass() && (victim->flags4 & MF4_DONTHARMCLASS))//[GEC]
+				{
+					// Don't hurt same class or any relative -
+					// but only if the target isn't one's hostile.
+					if (!victim->IsHostile(shooter))
+					{
+						// Allow hurting monsters the shooter hates.
+						if (victim->tid == 0 || shooter->TIDtoHate != victim->tid)
+						{
+							return false;
+						}
+					}
+				}
+
 				if (victim->GetSpecies() == shooter->GetSpecies() && !(victim->flags6 & MF6_DOHARMSPECIES))
 				{
 					// Don't hurt same species or any relative -
@@ -1155,8 +1177,11 @@ bool PIT_CheckThing(AActor *thing, FCheckPosition &tm)
 	}
 
 	// Check for skulls slamming into things
-	if (tm.thing->flags & MF_SKULLFLY)
+	if ((tm.thing->flags & MF_SKULLFLY))
 	{
+		if(tm.thing->BlockingMobj->flags8 & MF8_NOBLOCKSKULLFLY)//[GEC]
+			return true;
+
 		bool res = tm.thing->Slam(tm.thing->BlockingMobj);
 		tm.thing->BlockingMobj = NULL;
 		return res;
@@ -2149,7 +2174,12 @@ bool P_TryMove(AActor *thing, fixed_t x, fixed_t y,
 				}
 				else if (thing->flags2 & MF2_MCROSS)
 				{
-					P_ActivateLine(ld, thing, oldside, SPAC_MCross);
+					// [GEC] Doom psx & Doom64 monsters in chase execute triggers
+					if ((thing->flags & MF_INCHASE) && (thing->flags8 & MF8_TRIGGERINCHASEONLY) || 
+						(!(thing->flags8 & MF8_TRIGGERINCHASEONLY)))
+					{
+						P_ActivateLine(ld, thing, oldside, SPAC_MCross);
+					}
 				}
 				else if (thing->flags2 & MF2_PCROSS)
 				{
@@ -2996,7 +3026,51 @@ bool FSlide::BounceWall(AActor *mo)
 	}
 	line = bestslideline;
 
-	if (line->special == Line_Horizon)
+	// [GEC] Destroy
+	bool destroy = false;
+	if (line != NULL)
+	{
+		sector_t *front, *back;
+		fixedvec3 pos = {mo->X(), mo->Y(), mo->Z()};
+
+		if (line->sidedef[0])
+		{
+			front = line->frontsector;
+			back = line->backsector;
+		}
+		else
+		{
+			front = line->backsector;
+			back = line->frontsector;
+		}
+
+		if (back == NULL)
+		{
+			FTexture *texmid = TexMan[line->sidedef[0]->GetTexture(side_t::mid)];
+			if (texmid->bNoProjectileMiddle)
+			{
+				destroy = true;
+			}
+		}
+		else if (back->floorplane.ZatPoint (pos.x, pos.y) >= pos.z)
+		{
+			FTexture *texbottom = TexMan[line->sidedef[0]->GetTexture(side_t::bottom)];
+			if (texbottom->bNoProjectileBottom)
+			{
+				destroy = true;
+			}
+		}
+		else if (back->ceilingplane.ZatPoint (pos.x, pos.y) <= pos.z)
+		{
+			FTexture *textop = TexMan[line->sidedef[0]->GetTexture(side_t::top)];
+			if (textop->bNoProjectileTop)
+			{
+				destroy = true;
+			}
+		}
+	}
+
+	if (line->special == Line_Horizon || destroy)//[GEC]
 	{
 		mo->SeeSound = 0;	// it might make a sound otherwise
 		mo->Destroy();
@@ -3646,6 +3720,11 @@ static ETraceStatus CheckForActor(FTraceResults &res, void *userdata)
 	return TRACE_Stop;
 }
 
+// [kex]
+extern fixed_t laserhit_x;
+extern fixed_t laserhit_y;
+extern fixed_t laserhit_z;
+
 //==========================================================================
 //
 // P_LineAttack
@@ -3678,6 +3757,11 @@ AActor *P_LineAttack(AActor *t1, angle_t angle, fixed_t distance,
 	{
 		*actualdamage = 0;
 	}
+
+	//[GEC]
+	laserhit_x  = t1->X();
+	laserhit_y  = t1->Y();
+	laserhit_z  = t1->Z();
 
 	angle >>= ANGLETOFINESHIFT;
 	pitch = (angle_t)(pitch) >> ANGLETOFINESHIFT;
@@ -3728,6 +3812,12 @@ AActor *P_LineAttack(AActor *t1, angle_t angle, fixed_t distance,
 		MF_SHOOTABLE, ML_BLOCKEVERYTHING | ML_BLOCKHITSCAN, t1, trace,
 		tflags, CheckForActor, &TData))
 	{ // hit nothing
+
+		//[GEC]
+		laserhit_x  = trace.X;
+		laserhit_y  = trace.Y;
+		laserhit_z  = trace.Z;
+
 		if (puffDefaults == NULL)
 		{
 		}
@@ -3750,13 +3840,73 @@ AActor *P_LineAttack(AActor *t1, angle_t angle, fixed_t distance,
 
 		if (trace.HitType != TRACE_HitActor)
 		{
+			bool nopuff = false;
+			// [GEC] Don't puff
+			if (trace.Line != NULL)
+			{
+				sector_t *front, *back;
+				fixed_t closer = trace.Distance - 4 * FRACUNIT;
+				fixedvec3 pos = t1->Vec3Offset(FixedMul(vx, closer), FixedMul(vy, closer), shootz + FixedMul(vz, closer));
+
+				if (trace.Line->sidedef[0])
+				{
+					front = trace.Line->frontsector;
+					back = trace.Line->backsector;
+				}
+				else
+				{
+					front = trace.Line->backsector;
+					back = trace.Line->frontsector;
+				}
+
+				if (back == NULL)
+				{
+					FTexture *texmid = TexMan[trace.Line->sidedef[0]->GetTexture(side_t::mid)];
+					if (texmid->bNoPuffMiddle)
+					{
+						nopuff = true;
+					}
+				}
+				else if (back->floorplane.ZatPoint (pos.x, pos.y) >= pos.z)
+				{
+					FTexture *texbottom = TexMan[trace.Line->sidedef[0]->GetTexture(side_t::bottom)];
+					if (texbottom->bNoPuffBottom)
+					{
+						nopuff = true;
+					}
+				}
+				else if (back->ceilingplane.ZatPoint (pos.x, pos.y) <= pos.z)
+				{
+					FTexture *textop = TexMan[trace.Line->sidedef[0]->GetTexture(side_t::top)];
+					if (textop->bNoPuffTop)
+					{
+						nopuff = true;
+					}
+				}
+			}
+
 			// position a bit closer for puffs
 			if (trace.HitType != TRACE_HitWall || trace.Line->special != Line_Horizon)
 			{
 				fixed_t closer = trace.Distance - 4 * FRACUNIT;
 				fixedvec2 pos = t1->Vec2Offset(FixedMul(vx, closer), FixedMul(vy, closer));
-				puff = P_SpawnPuff(t1, pufftype, pos.x, pos.y,
-					shootz + FixedMul(vz, closer), angle - ANG90, 0, puffFlags);
+
+				if(!nopuff)//[GEC]
+				{
+					puff = P_SpawnPuff(t1, pufftype, pos.x, pos.y,
+						shootz + FixedMul(vz, closer), angle - ANG90, 0, puffFlags);
+				}
+
+				//[GEC]
+				laserhit_x  = pos.x;
+				laserhit_y  = pos.y;
+				laserhit_z  = shootz + FixedMul(vz, closer);
+			}
+			else if (trace.Line->special == Line_Horizon)//[GEC]
+			{
+				laserhit_x  = trace.X;
+				laserhit_y  = trace.Y;
+				laserhit_z  = trace.Z;
 			}
 
 			// [RH] Spawn a decal
@@ -3794,6 +3944,10 @@ AActor *P_LineAttack(AActor *t1, angle_t angle, fixed_t distance,
 				hitx = t1->X() + FixedMul(vx, trace.Distance);
 				hity = t1->Y() + FixedMul(vy, trace.Distance);
 				hitz = shootz + FixedMul(vz, trace.Distance);
+				//[GEC]
+				laserhit_x  = hitx;
+				laserhit_y  = hity;
+				laserhit_z  = hitz;
 				P_HitWater(puff, P_PointInSector(hitx, hity), hitx, hity, hitz);
 			}
 		}
@@ -3815,7 +3969,10 @@ AActor *P_LineAttack(AActor *t1, angle_t angle, fixed_t distance,
 			hity = t1->Y() + FixedMul(vy, dist);
 			hitz = shootz + FixedMul(vz, dist);
 
-			
+			//[GEC]
+			laserhit_x  = hitx;
+			laserhit_y  = hity;
+			laserhit_z  = hitz;
 
 			// Spawn bullet puffs or blood spots, depending on target type.
 			if ((puffDefaults != NULL && puffDefaults->flags3 & MF3_PUFFONACTORS) ||
@@ -3905,6 +4062,12 @@ AActor *P_LineAttack(AActor *t1, angle_t angle, fixed_t distance,
 				puff = P_SpawnPuff(t1, pufftype, hitx, hity, hitz, angle - ANG180, 2, puffFlags | PF_HITTHING | PF_TEMPORARY);
 				killPuff = true;
 			}
+
+			//[GEC]
+			laserhit_x  = hitx;
+			laserhit_y  = hity;
+			laserhit_z  = hitz;
+
 			SpawnDeepSplash(t1, trace, puff, vx, vy, vz, shootz, trace.Crossed3DWater != NULL);
 		}
 	}
@@ -4303,10 +4466,55 @@ void P_RailAttack(AActor *source, int damage, int offset_xy, fixed_t offset_z, i
 	{
 		AActor* puff = NULL;
 
+		bool nopuff = false;
+		// [GEC] Don't puff
+		if (trace.Line != NULL)
+		{
+			sector_t *front, *back;
+			fixed_t closer = trace.Distance - 4 * FRACUNIT;
+			fixedvec3 pos = {trace.X, trace.Y, trace.Z};
+
+			if (trace.Line->sidedef[0])
+			{
+				front = trace.Line->frontsector;
+				back = trace.Line->backsector;
+			}
+			else
+			{
+				front = trace.Line->backsector;
+				back = trace.Line->frontsector;
+			}
+
+			if (back == NULL)
+			{
+				FTexture *texmid = TexMan[trace.Line->sidedef[0]->GetTexture(side_t::mid)];
+				if (texmid->bNoPuffMiddle)
+				{
+					nopuff = true;
+				}
+			}
+			else if (back->floorplane.ZatPoint (pos.x, pos.y) >= pos.z)
+			{
+				FTexture *texbottom = TexMan[trace.Line->sidedef[0]->GetTexture(side_t::bottom)];
+				if (texbottom->bNoPuffBottom)
+				{
+					nopuff = true;
+				}
+			}
+			else if (back->ceilingplane.ZatPoint (pos.x, pos.y) <= pos.z)
+			{
+				FTexture *textop = TexMan[trace.Line->sidedef[0]->GetTexture(side_t::top)];
+				if (textop->bNoPuffTop)
+				{
+					nopuff = true;
+				}
+			}
+		}
+
 		if (puffclass != NULL && puffDefaults->flags3 & MF3_ALWAYSPUFF)
 		{
 			puff = P_SpawnPuff(source, puffclass, trace.X, trace.Y, trace.Z, (source->angle + angleoffset) - ANG90, 1, 0);
-			if (puff && (trace.Line != NULL) && (trace.Line->special == Line_Horizon) && !(puff->flags3 & MF3_SKYEXPLODE))
+			if (puff && (trace.Line != NULL) && (trace.Line->special == Line_Horizon) && !(puff->flags3 & MF3_SKYEXPLODE) && nopuff)//[GEC]
 				puff->Destroy();
 		}
 		if (puff != NULL && puffDefaults->flags7 & MF7_FORCEDECAL && puff->DecalGenerator)
@@ -4881,8 +5089,12 @@ void P_RadiusAttack(AActor *bombspot, AActor *bombsource, int bombdamage, int bo
 								angle_t ang = bombspot->AngleTo(thing) >> ANGLETOFINESHIFT;
 								thing->velx += fixed_t(finecosine[ang] * thrust);
 								thing->vely += fixed_t(finesine[ang] * thrust);
+
 								if (!(flags & RADF_NODAMAGE))
+								{
+									if(!(thing->flags8 & MF8_NODMGTHRUSTZ))// [GEC] Don't Thrust Z
 									thing->velz += (fixed_t)velz;	// this really doesn't work well
+								}
 							}
 						}
 					}

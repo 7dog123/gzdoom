@@ -652,7 +652,12 @@ bool P_TryWalk (AActor *actor)
 	{
 		return false;
 	}
-	actor->movecount = pr_trywalk() & 15;
+
+	if(actor->flags8 & MF8_MOVECOUNTD64)//[GEC]
+		actor->movecount = pr_trywalk() & 7;
+	else
+		actor->movecount = pr_trywalk() & 15;
+
 	return true;
 }
 
@@ -1731,6 +1736,12 @@ DEFINE_ACTION_FUNCTION(AActor, A_Look)
 {
 	AActor *targ;
 
+	if(self->flags8 & MF8_WAITLOOK)//[GEC]
+	{
+		if(level.time <= 16)
+			return;
+	}
+
 	if (self->flags5 & MF5_INCONVERSATION)
 		return;
 
@@ -1856,6 +1867,8 @@ DEFINE_ACTION_FUNCTION_PARAMS(AActor, A_LookEx)
 
 	AActor *targ = NULL; // Shuts up gcc
 	fixed_t dist;
+	fixed_t dist2 = 2147483647; //D_MAXINT;//[GEC]
+
 	angle_t fov = (fov_f == 0) ? ANGLE_180 : angle_t(fov_f * ANGLE_90 / 90);
 	FLookExParams params = { fov, minseedist, maxseedist, maxheardist, flags, seestate };
 
@@ -1912,6 +1925,17 @@ DEFINE_ACTION_FUNCTION_PARAMS(AActor, A_LookEx)
         }
 	}
 
+
+	if (flags & LOF_KILLABLETARGET)//[GEC]
+	{
+		// find a killable target as close as possible
+		if(P_LookForMonsters (self))
+		{
+			targ = self->target;
+			goto seeyou;
+		}
+	}
+
 	// [RH] Andy Baker's stealth monsters
 	if (self->flags & MF_STEALTH)
 	{
@@ -1924,7 +1948,7 @@ DEFINE_ACTION_FUNCTION_PARAMS(AActor, A_LookEx)
 		{
 			if (!(self->flags4 & MF4_STANDSTILL))
 			{
-				if (!(flags & LOF_NOSIGHTCHECK))
+				if (!(flags & LOF_NOSIGHTCHECK) && !(flags & LOF_KILLABLETARGET))//[GEC]
 				{
 					// If we find a valid target here, the wandering logic should *not*
 					// be activated! If would cause the seestate to be set twice.
@@ -1979,7 +2003,7 @@ DEFINE_ACTION_FUNCTION_PARAMS(AActor, A_LookEx)
 		}
 	}
 
-	if (!(flags & LOF_NOSIGHTCHECK))
+	if (!(flags & LOF_NOSIGHTCHECK) && !(flags & LOF_KILLABLETARGET))
 	{
 		if (!P_LookForPlayers(self, true, &params))
 			return;
@@ -2276,6 +2300,7 @@ void A_DoChase (AActor *actor, bool fastchase, FState *meleestate, FState *missi
 		}
 		if (P_LookForPlayers (actor, true, NULL) && actor->target != actor->goal)
 		{ // got a new target
+			if((actor->flags8 & MF8_SEETARGET)){actor->SetIdle();} // [GEC] Doom psx & Doom64 Reset Idle State
 			actor->flags &= ~MF_INCHASE;
 			return;
 		}
@@ -2823,8 +2848,7 @@ void A_Face (AActor *self, AActor *other, angle_t max_turn, angle_t max_pitch, a
 		{
 			self->pitch = other_pitch;
 		}
-		if (flags & FAF_NODISTFACTOR)
-			self->pitch += pitch_offset;
+		self->pitch += pitch_offset;
 	}
 	
 

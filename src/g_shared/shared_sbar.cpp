@@ -75,6 +75,10 @@ EXTERN_CVAR (Bool, am_showtotaltime)
 EXTERN_CVAR (Bool, noisedebug)
 EXTERN_CVAR (Int, con_scaletext)
 
+EXTERN_CVAR (Int, con_messagetype)//[GEC]
+EXTERN_CVAR (Bool, con_centernotify)//[GEC]
+extern int HideMapName;//[GEC]
+
 DBaseStatusBar *StatusBar;
 
 extern int setblocks;
@@ -1364,22 +1368,122 @@ void DBaseStatusBar::Draw (EHudState state)
 			}
 		}
 		FString mapname;
-
 		ST_FormatMapName(mapname, TEXTCOLOR_GREY);
-		screen->DrawText (SmallFont, highlight,
-			(SCREENWIDTH - SmallFont->StringWidth (mapname)*CleanXfac)/2, y, mapname,
-			DTA_CleanNoMove, true, TAG_DONE);
+		if (con_messagetype == 1)//[GEC]
+		{
+			mysnprintf (line, countof(line), "Level %d:%s", level.levelnum, level.LevelName.GetChars());	// Time
+			mapname = line;
+
+			bool center = (con_centernotify != 0.f);
+			int mResW = 256, mBaseResW = 256;
+			int mResH = 224, mBaseResH = 224;
+			int x = 2;
+			int y = Scale (::ST_Y, 224, SCREENHEIGHT);
+
+			if (con_scaletext == 0)//"Off"
+			{
+				mResW = Scale (mResW, SCREENWIDTH, mBaseResW);
+				mResH = Scale (mResH, SCREENHEIGHT, mBaseResH);
+
+				x = Scale (x, SCREENWIDTH, mBaseResW);
+				y = Scale (y, SCREENHEIGHT, mBaseResH);
+			}
+			else if (con_scaletext == 2)//"Double"
+			{
+				mResW = Scale (mResW, SCREENWIDTH/2, mBaseResW);
+				mResH = Scale (mResH, SCREENHEIGHT/2, mBaseResH);
+
+				x = Scale (x, SCREENWIDTH/2, mBaseResW);
+				y = Scale (y, SCREENHEIGHT/2, mBaseResH);
+			}
+
+			y -= SmallFont->GetHeight() - 1;
+
+			if(!HideMapName)
+			{
+				if (!center)
+					screen->DrawText (SmallFont, CR_UNTRANSLATED, (int)x, (int)y, mapname, DTA_ResWidthF, mResW, DTA_ResHeightF, mResH, TAG_DONE);
+				else
+					screen->DrawText (SmallFont, CR_UNTRANSLATED, (int)(mResW - SmallFont->StringWidth (mapname)) / 2, (int)y, mapname,
+						DTA_ResWidthF, mResW, DTA_ResHeightF, mResH, TAG_DONE);
+			}
+		}
+		else if (con_messagetype == 2)//[GEC]
+		{
+			mysnprintf (line, countof(line), "Level %d: %s", level.levelnum, level.LevelName.GetChars());	// Time
+			mapname = line;
+
+			bool center = (con_centernotify != 0.f);
+			int mResW = 320, mBaseResW = 320;
+			int mResH = 240, mBaseResH = 240;
+			int x = 20;
+			int y = 20;
+
+			if (con_scaletext == 0)//"Off"
+			{
+				mResW = Scale (mResW, SCREENWIDTH, mBaseResW);
+				mResH = Scale (mResH, SCREENHEIGHT, mBaseResH);
+
+				x = Scale (x, SCREENWIDTH, mBaseResW);
+				y = Scale (y, SCREENHEIGHT, mBaseResH);
+			}
+			else if (con_scaletext == 2)//"Double"
+			{
+				mResW = Scale (mResW, SCREENWIDTH/2, mBaseResW);
+				mResH = Scale (mResH, SCREENHEIGHT/2, mBaseResH);
+
+				x = Scale (x, SCREENWIDTH/2, mBaseResW);
+				y = Scale (y, SCREENHEIGHT/2, mBaseResH);
+			}
+
+			if(!HideMapName)
+			{
+				if (!center)
+					screen->DrawText (SmallFont, CR_UNTRANSLATED, (int)x, (int)y, mapname, DTA_ResWidthF, mResW, DTA_ResHeightF, mResH, TAG_DONE);
+				else
+					screen->DrawText (SmallFont, CR_UNTRANSLATED, (int)(mResW - SmallFont->StringWidth (mapname)) / 2, (int)y, mapname,
+						DTA_ResWidthF, mResW, DTA_ResHeightF, mResH, TAG_DONE);
+			}
+		}
+		else
+		{
+			screen->DrawText (SmallFont, highlight,
+				(SCREENWIDTH - SmallFont->StringWidth (mapname)*CleanXfac)/2, y, mapname,
+				DTA_CleanNoMove, true, TAG_DONE);
+		}
 
 		if (!deathmatch)
 		{
 			int y = 8;
+			int x = 8;
+
+			int mResW = 320, mBaseResW = 320;
+			int mResH = 240, mBaseResH = 240;
+			int yy = 0;
+
+			if (con_scaletext == 0)//"Off"
+			{
+				x = Scale (2, SCREENWIDTH, 256);
+			}
+			if (con_messagetype == 2)//[GEC]
+			{
+				if (am_showmonsters)
+					yy += height;
+				if (am_showsecrets)
+					yy += height;
+				if (am_showitems)
+					yy += height;
+
+				y = Scale (::ST_Y - yy, mResH, SCREENHEIGHT);
+				y = Scale (y, SCREENHEIGHT, mBaseResH);
+			}
 
 			// Draw monster count
 			if (am_showmonsters)
 			{
 				mysnprintf (line, countof(line), "%s" TEXTCOLOR_GREY " %d/%d",
 					GStrings("AM_MONSTERS"), level.killed_monsters, level.total_monsters);
-				screen->DrawText (SmallFont, highlight, 8, y, line,
+				screen->DrawText (SmallFont, highlight, x, y, line,
 					DTA_CleanNoMove, true, TAG_DONE);
 				y += height;
 			}
@@ -1389,7 +1493,7 @@ void DBaseStatusBar::Draw (EHudState state)
 			{
 				mysnprintf (line, countof(line), "%s" TEXTCOLOR_GREY " %d/%d",
 					GStrings("AM_SECRETS"), level.found_secrets, level.total_secrets);
-				screen->DrawText (SmallFont, highlight, 8, y, line,
+				screen->DrawText (SmallFont, highlight, x, y, line,
 					DTA_CleanNoMove, true, TAG_DONE);
 				y += height;
 			}
@@ -1399,7 +1503,7 @@ void DBaseStatusBar::Draw (EHudState state)
 			{
 				mysnprintf (line, countof(line), "%s" TEXTCOLOR_GREY " %d/%d",
 					GStrings("AM_ITEMS"), level.found_items, level.total_items);
-				screen->DrawText (SmallFont, highlight, 8, y, line,
+				screen->DrawText (SmallFont, highlight, x, y, line,
 					DTA_CleanNoMove, true, TAG_DONE);
 			}
 		}

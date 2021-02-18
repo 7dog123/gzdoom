@@ -329,6 +329,10 @@ void G_DoNewGame (void)
 	{
 		gameskill = d_skill;
 	}
+
+	//if(gameinfo.mStartWipe != GS_DEMOSCREEN)//[GEC]
+			//wipegamestate = gameinfo.mStartWipe;
+
 	G_InitNew (d_mapname, false);
 	gameaction = ga_nothing;
 }
@@ -502,6 +506,8 @@ void G_InitNew (const char *mapname, bool bTitleLevel)
 	}
 	else if (gamestate != GS_STARTUP)
 	{
+		M_ClearMenus ();
+
 		gamestate = GS_LEVEL;
 	}
 	G_DoLoadLevel (0, false);
@@ -672,6 +678,81 @@ const char *G_GetSecretExitMap()
 	return nextmap;
 }
 
+//-----------------------------------------------------------------------------
+//
+// [GEC] Exit Delay PSX D64
+//
+//-----------------------------------------------------------------------------
+
+// We need the thinker_t stuff.
+//#include "dthinker.h"
+
+class DExit : public DThinker //[GEC] Exit Delay PSX D64
+{
+	DECLARE_CLASS (DExit, DThinker)
+public:
+	DExit (char *levelname, int position, int keepFacing);
+	void	Serialize (FArchive &arc);
+	void	Tick ();
+protected:
+	char *m_levelname;
+	int 	m_position;
+	int 	m_keepFacing;
+	int 	m_ticker;
+private:
+	DExit ();
+};
+
+IMPLEMENT_CLASS (DExit)
+
+DExit::DExit ()
+{
+}
+
+void DExit::Serialize (FArchive &arc)
+{
+	Super::Serialize (arc);
+	arc << m_levelname << m_position << m_keepFacing << m_ticker;
+}
+
+//-----------------------------------------------------------------------------
+//
+//
+//
+//-----------------------------------------------------------------------------
+
+void DExit::Tick ()
+{
+	//Printf("m_ticker %d\n",m_ticker);
+	if(!m_ticker--)
+	{
+		if(usergame)//[GEC]
+		{
+			G_ChangeLevel(m_levelname, m_position, m_keepFacing);
+			//G_ChangeLevel(G_GetSecretExitMap(), position, 0);
+		}
+		else if(gamestate == GS_TITLELEVEL/* && DrawCustomPage*/)
+		{
+			gamestate = GS_DEMOSCREEN;
+			D_AdvanceDemo();
+		}
+    }
+}
+
+//-----------------------------------------------------------------------------
+//
+//
+//
+//-----------------------------------------------------------------------------
+
+DExit::DExit (char *levelname, int position, int keepFacing)
+{
+	m_levelname = levelname;
+	m_position = position;
+	m_keepFacing = keepFacing;
+	m_ticker = level.ExitDelay;
+}
+
 //==========================================================================
 //
 //
@@ -679,13 +760,73 @@ const char *G_GetSecretExitMap()
 
 void G_ExitLevel (int position, bool keepFacing)
 {
+	if(!level.ExitDelay)
+	{
+		if(usergame)//[GEC]
+		{
+			G_ChangeLevel(G_GetExitMap(), position, keepFacing ? CHANGELEVEL_KEEPFACING : 0);
+		}
+		else if(gamestate == GS_TITLELEVEL/* && DrawCustomPage*/)
+		{
+			gamestate = GS_DEMOSCREEN;
+			D_AdvanceDemo();
+		}
+	}
+	else
+	{
+		new DExit ((char *)G_GetExitMap(), position, keepFacing ? CHANGELEVEL_KEEPFACING : 0);//[GEC]
+	}
+}
+
+void G_SecretExitLevel (int position) 
+{
+	if(!level.ExitDelay)
+	{
+		if(usergame)//[GEC]
+		{
+			G_ChangeLevel(G_GetSecretExitMap(), position, 0);
+		}
+		else if(gamestate == GS_TITLELEVEL/* && DrawCustomPage*/)
+		{
+			gamestate = GS_DEMOSCREEN;
+			D_AdvanceDemo();
+		}
+	}
+	else
+	{
+		new DExit ((char *)G_GetSecretExitMap(), position, 0);//[GEC]
+	}
+}
+
+void G_TeleportNewMap (const char *levelname, int position, int flags)//[GEC]
+{
+	if(!level.ExitDelay)
+	{
+		if(usergame)//[GEC]
+		{
+			G_ChangeLevel(levelname, position, flags);
+		}
+		else if(gamestate == GS_TITLELEVEL/* && DrawCustomPage*/)
+		{
+			gamestate = GS_DEMOSCREEN;
+			D_AdvanceDemo();
+		}
+	}
+	else
+	{
+		new DExit ((char *)levelname, position, flags);//[GEC]
+	}
+}
+
+/*void G_ExitLevel (int position, bool keepFacing)
+{
 	G_ChangeLevel(G_GetExitMap(), position, keepFacing ? CHANGELEVEL_KEEPFACING : 0);
 }
 
 void G_SecretExitLevel (int position) 
 {
 	G_ChangeLevel(G_GetSecretExitMap(), position, 0);
-}
+}*/
 
 //==========================================================================
 //
@@ -835,6 +976,12 @@ void G_DoCompleted (void)
 		level.maptime = 0;
 	}
 
+	//if ((level.flags & LEVEL_NOINTERMISSION))
+	{
+		if(gameinfo.mMapWipe != GS_DEMOSCREEN)//[GEC]
+		wipegamestate = gameinfo.mMapWipe;
+	}
+
 	if (!deathmatch &&
 		((level.flags & LEVEL_NOINTERMISSION) ||
 		((nextcluster == thiscluster) && (thiscluster->flags & CLUSTER_HUB))))
@@ -842,6 +989,11 @@ void G_DoCompleted (void)
 		G_WorldDone ();
 		return;
 	}
+	else if((nextcluster->flags & CLUSTER_NOINTERMISSION)/*||(thiscluster->flags & CLUSTER_NOINTERMISSION)*/)//[GEC]
+	{
+        G_WorldDone ();
+		return;
+    }
 
 	gamestate = GS_INTERMISSION;
 	viewactive = false;
@@ -921,7 +1073,9 @@ void G_DoLoadLevel (int position, bool autosave)
 			mapname.GetChars(), level.LevelName.GetChars());
 
 	if (wipegamestate == GS_LEVEL)
+	{
 		wipegamestate = GS_FORCEWIPE;
+	}
 
 	if (gamestate != GS_TITLELEVEL)
 	{
@@ -934,6 +1088,9 @@ void G_DoLoadLevel (int position, bool autosave)
 	//	we look for an actual index, instead of simply
 	//	setting one.
 	skyflatnum = TexMan.GetTexture (gameinfo.SkyFlatName, FTexture::TEX_Flat, FTextureManager::TEXMAN_Overridable);
+
+	//[GEC]
+	if(level.SkyFlatName.Len() != NULL) skyflatnum = TexMan.GetTexture(level.SkyFlatName, FTexture::TEX_Flat, FTextureManager::TEXMAN_Overridable);
 
 	// DOOM determines the sky texture to be used
 	// depending on the current episode and the game version.
@@ -982,6 +1139,13 @@ void G_DoLoadLevel (int position, bool autosave)
 	// clear cmd building stuff
 	ResetButtonStates ();
 
+	R_RefreshBrightness();//[GEC]
+	if(level.FadeInBrightness)
+	{
+		R_FadeInBrightness();//[GEC]
+		//new DFadeInBrightness (0);//[GEC]
+	}
+
 	SendItemUse = NULL;
 	SendItemDrop = NULL;
 	mousex = mousey = 0; 
@@ -1018,6 +1182,19 @@ void G_DoLoadLevel (int position, bool autosave)
 			players[ii].camera = players[ii].mo;
 		}
 	}
+
+	/*for (i = 0; i < MAXPLAYERS; i++)//[GEC] from Doom64 ex
+	{ 
+        if(level.ForceGodMode)// players can't be hurt on title map
+			players[i].cheats |= CF_GODMODE;
+        else if(level.ClearChts)// turn off godmode on hectic map
+            players[i].cheats &= ~CF_GODMODE;
+        else if(!level.ForceGodMode && (players[i].cheats & CF_GODMODE))
+            players[i].cheats &= ~CF_GODMODE;
+		else 
+			break;
+    }*/
+
 	StatusBar->AttachToPlayer (&players[consoleplayer]);
 	P_DoDeferedScripts ();	// [RH] Do script actions that were triggered on another map.
 	
@@ -1075,7 +1252,7 @@ void G_WorldDone (void)
 			thiscluster->flags & CLUSTER_EXITTEXTINLUMP,
 			thiscluster->flags & CLUSTER_FINALEPIC,
 			thiscluster->flags & CLUSTER_LOOKUPEXITTEXT,
-			true, endsequence);
+			true, endsequence, thiscluster);//[GEC]
 	}
 	else
 	{
@@ -1093,7 +1270,7 @@ void G_WorldDone (void)
 					nextcluster->flags & CLUSTER_ENTERTEXTINLUMP,
 					nextcluster->flags & CLUSTER_FINALEPIC,
 					nextcluster->flags & CLUSTER_LOOKUPENTERTEXT,
-					false);
+					false, NAME_None, nextcluster);//[GEC]
 			}
 			else if (thiscluster->ExitText.IsNotEmpty())
 			{
@@ -1103,7 +1280,7 @@ void G_WorldDone (void)
 					thiscluster->flags & CLUSTER_EXITTEXTINLUMP,
 					thiscluster->flags & CLUSTER_FINALEPIC,
 					thiscluster->flags & CLUSTER_LOOKUPEXITTEXT,
-					false);
+					false, NAME_None, thiscluster);//[GEC]
 			}
 		}
 	}
@@ -1293,7 +1470,9 @@ void G_InitLevelLocals ()
 	// [BB] Instead of just setting the color, we also have to reset Desaturate and build the lights.
 	NormalLight.ChangeColor (PalEntry (255, 255, 255), 0);
 
-	level.gravity = sv_gravity * 35/TICRATE;
+	//level.gravity = sv_gravity * 35/TICRATE;
+	level.gravity = sv_gravity * TICRATE/TICRATE;
+
 	level.aircontrol = (fixed_t)(sv_aircontrol * 65536.f);
 	level.teamdamage = teamdamage;
 	level.flags = 0;
@@ -1301,7 +1480,6 @@ void G_InitLevelLocals ()
 	level.flags3 = 0;
 
 	info = FindLevelInfo (level.MapName);
-
 	level.info = info;
 	level.skyspeed1 = info->skyspeed1;
 	level.skyspeed2 = info->skyspeed2;
@@ -1331,7 +1509,8 @@ void G_InitLevelLocals ()
 	level.WallHorizLight = info->WallHorizLight*2;
 	if (info->gravity != 0.f)
 	{
-		level.gravity = info->gravity * 35/TICRATE;
+		//level.gravity = info->gravity * 35/TICRATE;
+		level.gravity = info->gravity * TICRATE/TICRATE;
 	}
 	if (info->aircontrol != 0.f)
 	{
@@ -1368,6 +1547,15 @@ void G_InitLevelLocals ()
 
 	level.DefaultEnvironment = info->DefaultEnvironment;
 	level.DefaultSkybox = NULL;
+
+	level.SkyFlatName = info->SkyFlatName;//[GEC]
+	level.ExitDelay = info->ExitDelay;//[GEC]
+	level.FadeInBrightness = info->FadeInBrightness;//[GEC]
+	level.NoAlphaMask = info->NoAlphaMask;//[GEC]
+	level.ClearChts = info->ClearChts;//[GEC]
+	level.FadeLinear = info->FadeLinear;//[GEC]
+	level.ContinueMusicOnExit = info->ContinueMusicOnExit;//[GEC]
+	level.ClearMessages = info->ClearMessages;//[GEC]
 }
 
 //==========================================================================

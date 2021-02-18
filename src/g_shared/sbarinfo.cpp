@@ -1050,7 +1050,8 @@ public:
 				script->huds[hud]->Tick(NULL, this, true);
 
 				// Restore scaling if need be.
-				if(scalingWasForced)
+				//if(scalingWasForced)
+				if(scalingWasForced && (!script->huds[hud]->ForceScaled()))//[GEC]
 				{
 					scalingWasForced = false;
 					SetScaled(false);

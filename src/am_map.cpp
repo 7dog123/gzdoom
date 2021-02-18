@@ -204,6 +204,7 @@ static const char *ColorNames[] = {
 		"InterTeleportColor",
 		"SecretSectorColor",
 		"AlmostBackgroundColor",
+		"NotSeenColorIddt",//[GEC]
 		NULL
 };
 
@@ -234,6 +235,7 @@ struct AMColorset
 		InterTeleportColor,
 		SecretSectorColor,
 		AlmostBackgroundColor,
+		NotSeenColorIddt,//[GEC]
 		AM_NUM_COLORS
 	};
 
@@ -332,7 +334,7 @@ static FColorCVar *cv_standard[] = {
 	&am_lockedcolor,
 	&am_intralevelcolor,
 	&am_interlevelcolor,
-	&am_secretsectorcolor
+	&am_secretsectorcolor,
 };
 
 static FColorCVar *cv_overlay[] = {
@@ -400,6 +402,7 @@ static unsigned char DoomColors[]= {
 	NOT_USED,		// interteleport
 	NOT_USED,		// secretsector
 	0x10,0x10,0x10,	// almostbackground
+	NOT_USED,		// notseencoloriddt //[GEC]
 };
 
 static unsigned char StrifeColors[]= {
@@ -426,6 +429,7 @@ static unsigned char StrifeColors[]= {
 	NOT_USED,		// interteleport
 	NOT_USED,		// secretsector
 	0x10,0x10,0x10,	// almostbackground
+	NOT_USED,		// notseencoloriddt //[GEC]
 };
 
 static unsigned char RavenColors[]= {
@@ -452,6 +456,7 @@ static unsigned char RavenColors[]= {
 	NOT_USED,		// interteleport
 	NOT_USED,		// secretsector
 	0x10,0x10,0x10,	// almostbackground
+	NOT_USED,		// notseencoloriddt //[GEC]
 };
 
 #undef NOT_USED
@@ -460,6 +465,11 @@ static AMColorset AMColors;
 static AMColorset AMMod;
 static AMColorset AMModOverlay;
 
+
+static bool am_showallspecials = false;//[GEC]
+static int am_playerblinkmode = 0;//[GEC]
+static bool am_noshowplayertriangleiddt = false;//[GEC]
+static int am_blink = 0;        // player arrow blink tics
 
 //=============================================================================
 //
@@ -513,6 +523,36 @@ void FMapInfoParser::ParseAMColors(bool overlay)
 			{ 
 				sc.MustGetToken(TK_True); 
 				cset.displayLocks = true; 
+			} 
+		}
+		else if (nextKey.CompareNoCase("showallspecials") == 0)//[GEC]
+		{
+			if(sc.CheckToken(TK_False)) 
+				am_showallspecials = false; 
+			else 
+			{ 
+				sc.MustGetToken(TK_True); 
+				am_showallspecials = true; 
+			} 
+		}
+		else if (nextKey.CompareNoCase("playerblinkmode") == 0)//[GEC]
+		{
+			sc.MustGetToken(TK_StringConst);
+			if(sc.Compare("PsxDoom"))
+				am_playerblinkmode = 1;
+			else if(sc.Compare("Doom64"))
+				am_playerblinkmode = 2;
+			else
+				am_playerblinkmode = 0;
+		}
+		else if (nextKey.CompareNoCase("noshowplayertriangleiddt") == 0)//[GEC]
+		{
+			if(sc.CheckToken(TK_False)) 
+				am_noshowplayertriangleiddt = false; 
+			else 
+			{ 
+				sc.MustGetToken(TK_True); 
+				am_noshowplayertriangleiddt = true; 
 			} 
 		}
 		else
@@ -1258,6 +1298,8 @@ void AM_initVariables ()
 	old_m_y = m_y;
 	old_m_w = m_w;
 	old_m_h = m_h;
+
+	am_blink = 0;//[GEC]
 }
 
 //=============================================================================
@@ -1375,6 +1417,7 @@ void AM_Start ()
 	if (!stopped) AM_Stop();
 	stopped = false;
 	AM_initVariables();
+	am_blink = 0x5F | 0x100;
 }
 
 
@@ -1626,6 +1669,40 @@ void AM_Ticker ()
 	// Change x,y location
 	//if (m_paninc.x || m_paninc.y)
 		AM_changeWindowLoc();
+
+	//
+    // blinking tics [GEC]
+    //
+
+	if(am_playerblinkmode == 1)//PsxDoom
+	{
+		am_blink = (am_blink++)&7;
+	}
+	else if(am_playerblinkmode == 2)//Doom64
+	{
+		if(am_blink & 0x100)
+		{
+			if((am_blink & 0xff) == 0xff)
+			{
+				am_blink = 0xff;
+			}
+			else
+			{
+				am_blink += 0x10;
+			}
+		}
+		else
+		{
+			if(am_blink < 0x5F)
+			{
+				am_blink = 0x5F | 0x100;
+			}
+			else
+			{
+				am_blink -= 0x10;
+			}
+		}
+	}
 }
 
 
@@ -1909,6 +1986,7 @@ void AM_drawSubsectors()
 	fixed_t scalex, scaley;
 	double originx, originy;
 	FDynamicColormap *colormap;
+	PalEntry flatcolor;
 	mpoint_t originpt;
 
 	for (int i = 0; i < numsubsectors; ++i)
@@ -1945,6 +2023,7 @@ void AM_drawSubsectors()
 		colormap = sec->ColorMap;
 
 		FTextureID maptex = sec->GetTexture(sector_t::floor);
+		flatcolor = sec->SpecialColors[sector_t::floor]; //[GEC] 
 
 		scalex = sec->GetXScale(sector_t::floor);
 		scaley = sec->GetYScale(sector_t::floor);
@@ -1993,6 +2072,7 @@ void AM_drawSubsectors()
 				if (roverz < cmpz)
 				{
 					maptex = *(rover->top.texture);
+					flatcolor = *(rover->top.flatcolor);//[GEC]
 					floorplane = rover->top.plane;
 					sector_t *model = rover->top.model;
 					int selector = (rover->flags & FF_INVERTPLANES) ? sector_t::floor : sector_t::ceiling;
@@ -2027,6 +2107,13 @@ void AM_drawSubsectors()
 		}
 		originx = f_x + ((originpt.x - m_x) * scale / float(1 << 24));
 		originy = f_y + (f_h - (originpt.y - m_y) * scale / float(1 << 24));
+
+		colormap = GetSpecialLights(//[GEC] set flat color on light color
+				MAKERGB(
+					(colormap->Color.r * flatcolor.r) / 255,
+					(colormap->Color.g * flatcolor.g) / 255,
+					(colormap->Color.b * flatcolor.b) / 255),
+				colormap->Fade,colormap->Desaturate);
 
 		// If this subsector has not actually been seen yet (because you are cheating
 		// to see it on the map), tint and desaturate it.
@@ -2408,7 +2495,15 @@ void AM_drawWalls (bool allmap)
 				}
 			}
 
-			if (AM_CheckSecret(&lines[i]))
+			if(!(lines[i].flags & ML_MAPPED) && AMColors.isValid(AMColors.NotSeenColorIddt))//[GEC]
+			{
+				AM_drawMline(&l, AMColors.NotSeenColorIddt);
+			}
+			else if((lines[i].special != 0) && !(lines[i].flags & ML_SECRET) && AMColors.isValid(AMColors.SpecialWallColor) && am_showallspecials)//[GEC]
+			{
+				AM_drawMline(&l, AMColors.SpecialWallColor);
+			}
+			else if (AM_CheckSecret(&lines[i]))
 			{
 				// map secret sectors like Boom
 				AM_drawMline(&l, AMColors.SecretSectorColor);
@@ -2607,6 +2702,25 @@ void AM_drawPlayers ()
 	angle_t angle;
 	int i;
 
+	unsigned char flash = 0xff;//[GEC]
+	unsigned char R, G, B;//[GEC]
+
+	if(am_playerblinkmode == 1) //PsxDoom
+	{
+		if(am_blink > 2)
+		{
+			flash = 0xff;
+		}
+		else
+		{
+			return;
+		}
+	}
+	else if(am_playerblinkmode == 2) //Doom64
+	{
+		flash = am_blink & 0xff;
+	}
+
 	if (!multiplayer)
 	{
 		mline_t *arrow;
@@ -2634,7 +2748,17 @@ void AM_drawPlayers ()
 			arrow = &MapArrow[0];
 			numarrowlines = MapArrow.Size();
 		}
-		AM_drawLineCharacter(arrow, numarrowlines, 0, angle, AMColors[AMColors.YourColor], pt.x, pt.y);
+
+		//[GEC]
+		AMColor color;
+		color = AMColors[AMColors.YourColor];
+
+		R = (RPART(color.RGB) * flash) / 255;
+		G = (GPART(color.RGB) * flash) / 255;
+		B = (BPART(color.RGB) * flash) / 255;
+		color.FromRGB(R, G, B);
+
+		AM_drawLineCharacter(arrow, numarrowlines, 0, angle, color/*AMColors[AMColors.YourColor]*/, pt.x, pt.y);
 		return;
 	}
 
@@ -2684,6 +2808,13 @@ void AM_drawPlayers ()
 				AM_rotatePoint (&pt.x, &pt.y);
 				angle -= players[consoleplayer].camera->angle - ANG90;
 			}
+
+
+			//[GEC]
+			R = (RPART(color.RGB) * flash) / 255;
+			G = (GPART(color.RGB) * flash) / 255;
+			B = (BPART(color.RGB) * flash) / 255;
+			color.FromRGB(R, G, B);
 
 			AM_drawLineCharacter(&MapArrow[0], MapArrow.Size(), 0, angle, color, pt.x, pt.y);
 		}
@@ -2750,115 +2881,125 @@ void AM_drawThings ()
 		t = sectors[i].thinglist;
 		while (t)
 		{
-			if (am_cheat > 0 || !(t->flags6 & MF6_NOTONAUTOMAP))
+			if(!(t->flags8 & MF8_NODRAWMAP))//[GEC]
 			{
-				p.x = t->X() >> FRACTOMAPBITS;
-				p.y = t->Y() >> FRACTOMAPBITS;
-
-				if (am_showthingsprites > 0 && t->sprite > 0)
+				if (am_cheat > 0 || !(t->flags6 & MF6_NOTONAUTOMAP))
 				{
-					FTexture *texture = NULL;
-					spriteframe_t *frame;
-					angle_t rotation = 0;
+					p.x = t->X() >> FRACTOMAPBITS;
+					p.y = t->Y() >> FRACTOMAPBITS;
 
-					// try all modes backwards until a valid texture has been found.	
-					for(int show = am_showthingsprites; show > 0 && texture == NULL; show--)
+					if (am_showthingsprites > 0 && t->sprite > 0)
 					{
-						const spritedef_t& sprite = sprites[t->sprite];
-						const size_t spriteIndex = sprite.spriteframes + (show > 1 ? t->frame : 0);
+						FTexture *texture = NULL;
+						spriteframe_t *frame;
+						angle_t rotation = 0;
 
-						frame = &SpriteFrames[spriteIndex];
-						angle_t angle = ANGLE_270 - t->angle;
-						if (frame->Texture[0] != frame->Texture[1]) angle += (ANGLE_180 / 16);
+						// try all modes backwards until a valid texture has been found.	
+						for(int show = am_showthingsprites; show > 0 && texture == NULL; show--)
+						{
+							const spritedef_t& sprite = sprites[t->sprite];
+							const size_t spriteIndex = sprite.spriteframes + (show > 1 ? t->frame : 0);
+
+							frame = &SpriteFrames[spriteIndex];
+							angle_t angle = ANGLE_270 - t->angle;
+							if (frame->Texture[0] != frame->Texture[1]) angle += (ANGLE_180 / 16);
+							if (am_rotate == 1 || (am_rotate == 2 && viewactive))
+							{
+								angle += players[consoleplayer].camera->angle - ANGLE_90;
+							}
+							rotation = angle >> 28;
+
+							const FTextureID textureID = frame->Texture[show > 2 ? rotation : 0];
+							texture = TexMan(textureID);
+						}
+
+						if (texture == NULL) goto drawTriangle;	// fall back to standard display if no sprite can be found.
+
+						const fixed_t spriteXScale = FixedMul(t->scaleX, 10 * scale_mtof);
+						const fixed_t spriteYScale = FixedMul(t->scaleY, 10 * scale_mtof);
+
+						DrawMarker (texture, p.x, p.y, 0, !!(frame->Flip & (1 << rotation)),
+							spriteXScale, spriteYScale, t->Translation, FRACUNIT, 0, LegacyRenderStyles[STYLE_Normal]);
+					}
+					else
+					{
+				drawTriangle:
+
+						if(t->player && am_noshowplayertriangleiddt)//[GEC]
+						{
+							t = t->snext;
+							continue;
+						}
+
+						angle = t->angle;
+
 						if (am_rotate == 1 || (am_rotate == 2 && viewactive))
 						{
-							angle += players[consoleplayer].camera->angle - ANGLE_90;
+							AM_rotatePoint (&p.x, &p.y);
+							angle += ANG90 - players[consoleplayer].camera->angle;
 						}
-						rotation = angle >> 28;
 
-						const FTextureID textureID = frame->Texture[show > 2 ? rotation : 0];
-						texture = TexMan(textureID);
-					}
+						color = AMColors[AMColors.ThingColor];
 
-					if (texture == NULL) goto drawTriangle;	// fall back to standard display if no sprite can be found.
-
-					const fixed_t spriteXScale = FixedMul(t->scaleX, 10 * scale_mtof);
-					const fixed_t spriteYScale = FixedMul(t->scaleY, 10 * scale_mtof);
-
-					DrawMarker (texture, p.x, p.y, 0, !!(frame->Flip & (1 << rotation)),
-						spriteXScale, spriteYScale, t->Translation, FRACUNIT, 0, LegacyRenderStyles[STYLE_Normal]);
-				}
-				else
-				{
-			drawTriangle:
-					angle = t->angle;
-
-					if (am_rotate == 1 || (am_rotate == 2 && viewactive))
-					{
-						AM_rotatePoint (&p.x, &p.y);
-						angle += ANG90 - players[consoleplayer].camera->angle;
-					}
-
-					color = AMColors[AMColors.ThingColor];
-
-					// use separate colors for special thing types
-					if (t->flags3&MF3_ISMONSTER && !(t->flags&MF_CORPSE))
-					{
-						if (t->flags & MF_FRIENDLY) color = AMColors[AMColors.ThingColor_Friend];
-						else if (!(t->flags & MF_COUNTKILL)) color = AMColors[AMColors.ThingColor_NocountMonster];
-						else color = AMColors[AMColors.ThingColor_Monster];
-					}
-					else if (t->flags&MF_SPECIAL)
-					{
-						// Find the key's own color.
-						// Only works correctly if single-key locks have lower numbers than any-key locks.
-						// That is the case for all default keys, however.
-						if (t->IsKindOf(RUNTIME_CLASS(AKey)))
+						// use separate colors for special thing types
+						if (t->flags3&MF3_ISMONSTER && !(t->flags&MF_CORPSE))
 						{
-							if (G_SkillProperty(SKILLP_EasyKey))
+							if (t->flags & MF_FRIENDLY) color = AMColors[AMColors.ThingColor_Friend];
+							else if (!(t->flags & MF_COUNTKILL)) color = AMColors[AMColors.ThingColor_NocountMonster];
+							else color = AMColors[AMColors.ThingColor_Monster];
+						}
+						else if (t->flags&MF_SPECIAL)
+						{
+							// Find the key's own color.
+							// Only works correctly if single-key locks have lower numbers than any-key locks.
+							// That is the case for all default keys, however.
+							if (t->IsKindOf(RUNTIME_CLASS(AKey)))
 							{
-								// Already drawn by AM_drawKeys(), so don't draw again
-								color.Index = -1;
-							}
-							else if (am_showkeys)
-							{
-								int P_GetMapColorForKey (AInventory * key);
-								int c = P_GetMapColorForKey(static_cast<AKey *>(t));
+								if (G_SkillProperty(SKILLP_EasyKey))
+								{
+									// Already drawn by AM_drawKeys(), so don't draw again
+									color.Index = -1;
+								}
+								else if (am_showkeys)
+								{
+									int P_GetMapColorForKey (AInventory * key);
+									int c = P_GetMapColorForKey(static_cast<AKey *>(t));
 
-								if (c >= 0)	color.FromRGB(RPART(c), GPART(c), BPART(c));
-								else color = AMColors[AMColors.ThingColor_CountItem];
-								AM_drawLineCharacter(&CheatKey[0], CheatKey.Size(), 0, 0, color, p.x, p.y);
-								color.Index = -1;
+									if (c >= 0)	color.FromRGB(RPART(c), GPART(c), BPART(c));
+									else color = AMColors[AMColors.ThingColor_CountItem];
+									AM_drawLineCharacter(&CheatKey[0], CheatKey.Size(), 0, 0, color, p.x, p.y);
+									color.Index = -1;
+								}
+								else
+								{
+									color = AMColors[AMColors.ThingColor_Item];
+								}
 							}
+							else if (t->flags&MF_COUNTITEM)
+								color = AMColors[AMColors.ThingColor_CountItem];
 							else
-							{
 								color = AMColors[AMColors.ThingColor_Item];
-							}
 						}
-						else if (t->flags&MF_COUNTITEM)
-							color = AMColors[AMColors.ThingColor_CountItem];
-						else
-							color = AMColors[AMColors.ThingColor_Item];
-					}
 
-					if (color.Index != -1)
-					{
-						AM_drawLineCharacter
-							(thintriangle_guy, NUMTHINTRIANGLEGUYLINES,
-							16<<MAPBITS, angle, color, p.x, p.y);
-					}
-
-					if (am_cheat == 3 || am_cheat == 6)
-					{
-						static const mline_t box[4] =
+						if (color.Index != -1)
 						{
-							{ { -MAPUNIT, -MAPUNIT }, {  MAPUNIT, -MAPUNIT } },
-							{ {  MAPUNIT, -MAPUNIT }, {  MAPUNIT,  MAPUNIT } },
-							{ {  MAPUNIT,  MAPUNIT }, { -MAPUNIT,  MAPUNIT } },
-							{ { -MAPUNIT,  MAPUNIT }, { -MAPUNIT, -MAPUNIT } },
-						};
+							AM_drawLineCharacter
+								(thintriangle_guy, NUMTHINTRIANGLEGUYLINES,
+								16<<MAPBITS, angle, color, p.x, p.y);
+						}
 
-						AM_drawLineCharacter (box, 4, t->radius >> FRACTOMAPBITS, angle - t->angle, color, p.x, p.y);
+						if (am_cheat == 3 || am_cheat == 6)
+						{
+							static const mline_t box[4] =
+							{
+								{ { -MAPUNIT, -MAPUNIT }, {  MAPUNIT, -MAPUNIT } },
+								{ {  MAPUNIT, -MAPUNIT }, {  MAPUNIT,  MAPUNIT } },
+								{ {  MAPUNIT,  MAPUNIT }, { -MAPUNIT,  MAPUNIT } },
+								{ { -MAPUNIT,  MAPUNIT }, { -MAPUNIT, -MAPUNIT } },
+							};
+
+							AM_drawLineCharacter (box, 4, t->radius >> FRACTOMAPBITS, angle - t->angle, color, p.x, p.y);
+						}
 					}
 				}
 			}

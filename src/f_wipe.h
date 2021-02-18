@@ -42,6 +42,9 @@ enum
 	wipe_Melt,			// weird screen melt
 	wipe_Burn,			// fade in shape of fire
 	wipe_Fade,			// crossfade from old to new
+	wipe_Melt64,		// [GEC] Doom64 Ex Melt
+	wipe_FadeScreen,	// [GEC] Doom64 Ex FadeScreen
+	wipe_LoadingScreen, // [GEC] Doom PSX
 	wipe_NUMWIPES
 };
 

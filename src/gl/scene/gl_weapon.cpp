@@ -56,6 +56,7 @@
 #include "gl/models/gl_models.h"
 #include "gl/shaders/gl_shader.h"
 #include "gl/textures/gl_material.h"
+#include "gl/textures/gl_combiners.h"//[GEC]
 
 EXTERN_CVAR (Bool, r_drawplayersprites)
 EXTERN_CVAR(Float, transsouls)
@@ -64,13 +65,15 @@ EXTERN_CVAR(Int, gl_fuzztype)
 EXTERN_CVAR (Bool, r_deathcamera)
 
 
+//static int TextureMode = TM_MODULATE;//[GEC]
+
 //==========================================================================
 //
 // R_DrawPSprite
 //
 //==========================================================================
 
-void FGLRenderer::DrawPSprite (player_t * player,pspdef_t *psp,fixed_t sx, fixed_t sy, int cm_index, bool hudModelStep, int OverrideShader)
+void FGLRenderer::DrawPSprite (player_t * player,pspdef_t *psp,fixed_t sx, fixed_t sy, int cm_index, bool hudModelStep, int OverrideShader, bool fullbright)//[GEC]
 {
 	float			fU1,fV1;
 	float			fU2,fV2;
@@ -80,6 +83,8 @@ void FGLRenderer::DrawPSprite (player_t * player,pspdef_t *psp,fixed_t sx, fixed
 	fixed_t			scalex;
 	fixed_t			texturemid;// 4:3		16:9		16:10			17:10			5:4
 	static fixed_t xratio[] = {FRACUNIT, FRACUNIT*3/4, FRACUNIT*5/6, FRACUNIT*40/51, FRACUNIT};
+	float resW = 320.0f;//[GEC]
+	float resH = 200.0f;//[GEC]
 	
 	// [BB] In the HUD model step we just render the model and break out. 
 	if ( hudModelStep )
@@ -96,13 +101,23 @@ void FGLRenderer::DrawPSprite (player_t * player,pspdef_t *psp,fixed_t sx, fixed
 	FMaterial * tex = FMaterial::ValidateTexture(lump, false);
 	if (!tex) return;
 
+	gl_RenderState.Set2DMode(false);//[GEC] enable shader on OverrideShader 0
+
 	tex->BindPatch(cm_index, 0, OverrideShader);
+	SetNewSpecials(tex, cm_index, true, true);//[GEC]
+
+	AWeapon * wi=player->ReadyWeapon;
+
+	//[GEC] Weapon Resolution
+	if (wi->W_RESH != 0){resH = FIXED2FLOAT(wi->W_RESH);}
+	if (wi->W_RESW != 0){resW = FIXED2FLOAT(wi->W_RESW);}
 
 	int vw = viewwidth;
 	int vh = viewheight;
 
 	// calculate edges of the shape
-	scalex = xratio[WidescreenRatio] * vw / 320;
+	//scalex = xratio[WidescreenRatio] * vw / 320;
+	scalex = (xratio[WidescreenRatio] * vw / resW); //[GEC]
 
 	tx = sx - ((160 + tex->GetScaledLeftOffset(GLUSE_PATCH))<<FRACBITS);
 	x1 = (FixedMul(tx, scalex)>>FRACBITS) + (vw>>1);
@@ -117,7 +132,7 @@ void FGLRenderer::DrawPSprite (player_t * player,pspdef_t *psp,fixed_t sx, fixed
 	// killough 12/98: fix psprite positioning problem
 	texturemid = (100<<FRACBITS) - (sy-(tex->GetScaledTopOffset(GLUSE_PATCH)<<FRACBITS));
 
-	AWeapon * wi=player->ReadyWeapon;
+	//AWeapon * wi=player->ReadyWeapon;
 	if (wi && wi->YAdjust)
 	{
 		if (screenblocks>=11)
@@ -130,7 +145,8 @@ void FGLRenderer::DrawPSprite (player_t * player,pspdef_t *psp,fixed_t sx, fixed
 		}
 	}
 
-	scale = ((SCREENHEIGHT*vw)/SCREENWIDTH) / 200.0f;    
+	//scale = ((SCREENHEIGHT*vw)/SCREENWIDTH) / 200.0f;  
+	scale = (((SCREENHEIGHT*vw)/SCREENWIDTH) / (float)resH);  //[GEC]
 	y1 = viewwindowy + (vh >> 1) - (int)(((float)texturemid / (float)FRACUNIT) * scale);
 	y2 = y1 + (int)((float)tex->TextureHeight(GLUSE_PATCH) * scale) + 1;
 
@@ -164,6 +180,33 @@ void FGLRenderer::DrawPSprite (player_t * player,pspdef_t *psp,fixed_t sx, fixed
 	{
 		gl_RenderState.EnableAlphaTest(true);
 	}
+
+	gl_RenderState.Set2DMode(true);//[GEC]
+}
+
+
+//==========================================================================
+//
+//
+//
+//==========================================================================
+
+static bool isBright(pspdef_t *psp)
+{
+	if (psp->state != NULL)
+	{
+		bool disablefullbright = false;
+		FTextureID lump = gl_GetSpriteFrame(psp->sprite, psp->frame, 0, 0, NULL);
+		if (lump.isValid() && gl_BrightmapsActive())
+		{
+			FMaterial * tex=FMaterial::ValidateTexture(lump, false);
+			if (tex)
+				disablefullbright = tex->tex->gl_info.bDisableFullbright;
+		}
+		return !!psp->state->GetFullbright() && !disablefullbright;
+	}
+
+	return false;
 }
 
 //==========================================================================
@@ -185,6 +228,13 @@ void FGLRenderer::DrawPlayerSprites(sector_t * viewsector, bool hudModelStep)
 	sector_t * fakesec, fs;
 	AActor * playermo=players[consoleplayer].camera;
 	player_t * player=playermo->player;
+
+	int texturemode;//[GEC]
+	int lightlevel64;//[GEC]
+	bool fullbright;//[GEC]
+	float DynCol[3] = {0.0, 0.0, 0.0};//[GEC]
+	float FragCol[4] = {1.0, 1.0, 1.0, 1.0};//[GEC]
+	gl_RenderState.ResetSpecials();//[GEC]
 	
 	// this is the same as the software renderer
 	if (!player ||
@@ -222,6 +272,7 @@ void FGLRenderer::DrawPlayerSprites(sector_t * viewsector, bool hudModelStep)
 
 	if (gl_fixedcolormap) 
 	{
+		lightlevel64 = 0;//[GEC]
 		lightlevel=255;
 		cm.GetFixedColormap();
 		statebright[0] = statebright[1] = true;
@@ -230,6 +281,8 @@ void FGLRenderer::DrawPlayerSprites(sector_t * viewsector, bool hudModelStep)
 	else
 	{
 		fakesec    = gl_FakeFlat(viewsector, &fs, false);
+
+		lightlevel64 = fakesec->lightlevel_64;//[GEC]
 
 		// calculate light level for weapon sprites
 		lightlevel = gl_ClampLight(fakesec->lightlevel);
@@ -246,6 +299,12 @@ void FGLRenderer::DrawPlayerSprites(sector_t * viewsector, bool hudModelStep)
 
 			lightlevel = (1.0 - min_L) * 255;
 		}
+		else if (glset.lightmode == 16)//[GEC]
+		{
+			lightlevel = gl_CalcLightLevel(lightlevel, getExtraLight(), true);
+			lightlevel = (!gl_fixedcolormap)? PSXDoomLightingEquation(lightlevel / 255.0, 64.0, 1) : 255;
+		}
+
 		lightlevel = gl_CheckSpriteGlow(viewsector, lightlevel, playermo->X(), playermo->Y(), playermo->Z());
 
 		// calculate colormap for weapon sprites
@@ -350,27 +409,34 @@ void FGLRenderer::DrawPlayerSprites(sector_t * viewsector, bool hudModelStep)
 	{
 		// brighten the weapon to reduce the difference between
 		// normal sprite and fullbright flash.
-		if (glset.lightmode != 8) lightlevel = (2*lightlevel+255)/3;
+
+		if (glset.lightmode == 16) lightlevel = clamp(lightlevel + 24, 0, 255);//[GEC] Ajsta el sprite normal y el fullbright flash como el doom psx
+		else if (glset.lightmode != 8) lightlevel = (2*lightlevel+255)/3;
 	}
 	
 	// hack alert! Rather than changing everything in the underlying lighting code let's just temporarily change
 	// light mode here to draw the weapon sprite.
 	int oldlightmode = glset.lightmode;
-	if (glset.lightmode == 8) glset.lightmode = 2;
+	if (glset.lightmode == 8 || glset.lightmode == 16) glset.lightmode = 2; //[GEC]
 	
 	for (i=0, psp=player->psprites; i<=ps_flash; i++,psp++)
 	{
 		if (psp->state) 
 		{
 			FColormap cmc = cm;
+			cmc.LightColorMul(viewsector->SpecialColors[sector_t::sprites]);//[GEC]
+
 			if (statebright[i]) 
 			{
 				if (fakesec == viewsector || in_area != area_below)	
 					// under water areas keep most of their color for fullbright objects
 				{
+					if(!(player->ReadyWeapon->WeaponFlags & WIF_GEC_BRIGHTWITHCOLOR))//[GEC] PSX color on fullbright state
+					{
 					cmc.LightColor.r=
 					cmc.LightColor.g=
 					cmc.LightColor.b=0xff;
+					}
 				}
 				else
 				{
@@ -379,14 +445,46 @@ void FGLRenderer::DrawPlayerSprites(sector_t * viewsector, bool hudModelStep)
 					cmc.LightColor.b = (3*cmc.LightColor.b + 0xff)/4;
 				}
 			}
+
+			//[GEC] Render style on flash
+			if (player->mo->FindInventory (RUNTIME_CLASS(APowerInvisibility)) == NULL)
+			{
+				if(i == ps_flash && player->ReadyWeapon->FlashRenderStyle >= STYLE_Fuzzy)
+				{
+					vis.RenderStyle = LegacyRenderStyles[player->ReadyWeapon->FlashRenderStyle];
+					gl_SetRenderStyle(vis.RenderStyle, false, false);
+					trans = FIXED2FLOAT(player->ReadyWeapon->Flash_Alpha);
+				}
+			}
 			// set the lighting parameters (only calls glColor and glAlphaFunc)
 			gl_SetSpriteLighting(vis.RenderStyle, playermo, statebright[i]? 255 : lightlevel, 
 				0, &cmc, 0xffffff, trans, statebright[i], true);
+
+			//[GEC]
+			gl_RenderState.GetTextureMode(&texturemode);//Get TextureMode
+			gl_RenderState.GetFragColor(&FragCol[0], &FragCol[1], &FragCol[2], &FragCol[3]);//Get FragColor
+			gl_RenderState.GetDynLight(&DynCol[0], &DynCol[1], &DynCol[2]);	//Get DynLight Color
+
+			if(oldlightmode == 16)//[GEC] PSX DOOM set fullbright check again
+				fullbright = isBright(psp);//[GEC]
+			else
+				fullbright = statebright[i];
+
+			SetInitSpecials(texturemode, oldlightmode, lightlevel, 0, lightlevel64, fullbright, FragCol, DynCol);
 			DrawPSprite (player,psp,psp->sx+ofsx, psp->sy+ofsy, cm.colormap, hudModelStep, OverrideShader);
+
+			//[GEC] Reset default
+			Disable_texunits();
+			gl_RenderState.SetTextureMode(texturemode);
 		}
 	}
+
 	gl_RenderState.EnableBrightmap(false);
 	glset.lightmode = oldlightmode;
+
+	//gl_RenderState.ResetSpecials();//[GEC]
+	//gl_RenderState.SetTextureMode(TM_MODULATE);//[GEC] Restore
+	//gl_RenderState.Apply();//[GEC]
 }
 
 //==========================================================================
@@ -397,6 +495,8 @@ void FGLRenderer::DrawPlayerSprites(sector_t * viewsector, bool hudModelStep)
 
 void FGLRenderer::DrawTargeterSprites()
 {
+	gl_RenderState.ResetSpecials();//[GEC]
+
 	int i;
 	pspdef_t *psp;
 	AActor * playermo=players[consoleplayer].camera;

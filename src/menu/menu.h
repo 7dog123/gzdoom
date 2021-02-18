@@ -111,6 +111,8 @@ struct FListMenuDescriptor : public FMenuDescriptor
 	EColorRange mFontColor2;
 	FMenuDescriptor *mRedirect;	// used to redirect overlong skill and episode menus to option menu based alternatives
 	bool mCenter;
+	bool mNoDim;//[GEC]
+	int mResW, mResH;//[GEC] Resolucion de la imagen
 
 	void Reset()
 	{
@@ -126,6 +128,10 @@ struct FListMenuDescriptor : public FMenuDescriptor
 		mFont = NULL;
 		mFontColor = CR_UNTRANSLATED;
 		mFontColor2 = CR_UNTRANSLATED;
+		mNoDim = false;//[GEC]
+		mResW = 0;//[GEC]
+		mResH = 0;//[GEC]
+
 	}
 };
 
@@ -220,7 +226,7 @@ public:
 
 	enum
 	{
-		BACKBUTTON_TIME = 4*TICRATE
+		BACKBUTTON_TIME = 4//*TICRATE // [GEC]
 	};
 
 	static DMenu *CurrentMenu;
@@ -235,7 +241,8 @@ public:
 	virtual void Drawer ();
 	virtual bool DimAllowed ();
 	virtual bool TranslateKeyboardEvents();
-	virtual void Close();
+	virtual void Close(bool noalpha = false);//[GEC]
+	virtual bool BackImage();//[GEC]
 	virtual bool MouseEvent(int type, int x, int y);
 	bool MouseEventBack(int type, int x, int y);
 	void SetCapture();
@@ -286,7 +293,7 @@ public:
 	virtual bool MouseEvent(int type, int x, int y);
 	virtual bool CheckHotkey(int c);
 	virtual int GetWidth();
-	void DrawSelector(int xofs, int yofs, FTextureID tex);
+	void DrawSelector(int xofs, int yofs, FTextureID tex, int resw = 0, int resh = 0);//[GEC]
 	void OffsetPositionY(int ydelta) { mYpos += ydelta; }
 	int GetY() { return mYpos; }
 	int GetX() { return mXpos; }
@@ -298,9 +305,10 @@ class FListMenuItemStaticPatch : public FListMenuItem
 protected:
 	FTextureID mTexture;
 	bool mCentered;
+	int mResW, mResH;//[GEC]
 
 public:
-	FListMenuItemStaticPatch(int x, int y, FTextureID patch, bool centered);
+	FListMenuItemStaticPatch(int x, int y, FTextureID patch, bool centered, int resw, int resh);//[GEC]
 	void Drawer(bool selected);
 };
 
@@ -311,9 +319,10 @@ protected:
 	FFont *mFont;
 	EColorRange mColor;
 	bool mCentered;
+	int mResW, mResH;//[GEC]
 
 public:
-	FListMenuItemStaticText(int x, int y, const char *text, FFont *font, EColorRange color, bool centered);
+	FListMenuItemStaticText(int x, int y, const char *text, FFont *font, EColorRange color, bool centered, int resw, int resh);//[GEC]
 	~FListMenuItemStaticText();
 	void Drawer(bool selected);
 };
@@ -377,6 +386,7 @@ protected:
 	int mHotkey;
 	int mHeight;
 	int mParam;
+	int mResW, mResH;//[GEC]
 
 public:
 	FListMenuItemSelectable(int x, int y, int height, FName childmenu, int mParam = -1);
@@ -385,6 +395,7 @@ public:
 	bool CheckHotkey(int c);
 	bool Activate();
 	bool MouseEvent(int type, int x, int y);
+	//bool MenuEvent (int mkey, bool fromcontroller);//[GEC]
 	FName GetAction(int *pparam);
 };
 
@@ -395,7 +406,7 @@ class FListMenuItemText : public FListMenuItemSelectable
 	EColorRange mColor;
 	EColorRange mColorSelected;
 public:
-	FListMenuItemText(int x, int y, int height, int hotkey, const char *text, FFont *font, EColorRange color, EColorRange color2, FName child, int param = 0);
+	FListMenuItemText(int x, int y, int height, int hotkey, const char *text, FFont *font, EColorRange color, EColorRange color2, FName child, int param = 0, int resw = 0, int resh = 0);//[GEC]
 	~FListMenuItemText();
 	void Drawer(bool selected);
 	int GetWidth();
@@ -405,7 +416,7 @@ class FListMenuItemPatch : public FListMenuItemSelectable
 {
 	FTextureID mTexture;
 public:
-	FListMenuItemPatch(int x, int y, int height, int hotkey, FTextureID patch, FName child, int param = 0);
+	FListMenuItemPatch(int x, int y, int height, int hotkey, FTextureID patch, FName child, int param = 0, int resw = 0, int resh = 0);//[GEC]
 	void Drawer(bool selected);
 	int GetWidth();
 };
@@ -670,7 +681,7 @@ void M_Ticker (void);
 void M_Drawer (void);
 void M_Init (void);
 void M_CreateMenus();
-void M_ActivateMenu(DMenu *menu);
+void M_ActivateMenu(DMenu *menu, bool noalpha = false);//[GEC]
 void M_ClearMenus ();
 void M_ParseMenuDefs();
 void M_StartupSkillMenu(FGameStartup *gs);
@@ -683,5 +694,60 @@ DMenu *StartPickerMenu(DMenu *parent, const char *name, FColorCVar *cvar);
 void M_RefreshModesList ();
 void M_InitVideoModesMenu ();
 
+
+
+//=============================================================================
+//
+// items for the player menu
+//
+//=============================================================================
+
+/*class FSkillSliderItem : public FListMenuItemSelectable//[GEC]
+{
+	const char *mText;
+	FFont *mFont;
+	EColorRange mFontColor;
+	int mMinrange, mMaxrange;
+	int mStep;
+	int mSelection;
+
+	const char *mType;
+
+	void DrawSlider (int x, int y);
+
+public:
+
+	FSkillSliderItem(int x, int y, int height, const char *text, FFont *font, EColorRange color, FName action,const char *type, int min, int max, int step, int resw, int resh);
+	~FSkillSliderItem();
+	bool SetValue(int i, int value);
+	bool GetValue(int i, int *pvalue);
+	bool MenuEvent (int mkey, bool fromcontroller);
+	void Drawer(bool selected);
+	bool MouseEvent(int type, int x, int y);
+};*/
+
+class FListMenuItemText2 : public FListMenuItemSelectable
+{
+	const char *mText;
+	FFont *mFont;
+	EColorRange mColor;
+	EColorRange mColorSelected;
+
+	int mType;
+	int mMinrange, mMaxrange;
+	int mStep;
+	int mSelection;
+	void DrawSubText(const char *text, int x, int y, bool selected);
+
+public:
+	FListMenuItemText2(int type, int x, int y, int height, int hotkey, const char *text, FFont *font, EColorRange color, EColorRange color2, FName child, int param = 0, int resw = 0, int resh = 0);//[GEC]
+	~FListMenuItemText2();
+	void ResetSelection(bool reset);
+	void Drawer(bool selected);
+	int GetWidth();
+	bool MouseEvent(int type, int x, int y);
+	bool MenuEvent (int mkey, bool fromcontroller);//[GEC]
+	bool Activate();
+};
 
 #endif

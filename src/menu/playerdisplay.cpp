@@ -50,6 +50,7 @@
 #include "r_state.h"
 #include "r_data/r_translate.h"
 
+extern int MenuAlpha; //[GEC]
 
 //=============================================================================
 //
@@ -546,7 +547,7 @@ void FListMenuItemPlayerDisplay::Drawer(bool selected)
 			FTexture *tex = TexMan(texid);
 			if (tex != NULL)
 			{
-				screen->DrawTexture (tex, mXpos, mYpos, DTA_Clean, true, TAG_DONE);
+				screen->DrawTexture (tex, mXpos, mYpos, DTA_Clean, true, TAG_DONE);//[GEC]
 				return;
 			}
 		}
@@ -558,8 +559,7 @@ void FListMenuItemPlayerDisplay::Drawer(bool selected)
 		DTA_DestWidth, 72 * CleanXfac,
 		DTA_DestHeight, 80 * CleanYfac,
 		DTA_Translation, &mRemap,
-		DTA_Masked, true,
-		TAG_DONE);
+		DTA_Masked, true, TAG_DONE);//[GEC]
 
 	V_DrawFrame (x, y, 72*CleanXfac, 80*CleanYfac-1);
 
@@ -595,7 +595,7 @@ void FListMenuItemPlayerDisplay::Drawer(bool selected)
 				DTA_DestHeight, MulScale16 (tex->GetScaledHeight() * CleanYfac, scaleY),
 				DTA_Translation, trans,
 				DTA_FlipX, sprframe->Flip & (1 << mRotation),
-				TAG_DONE);
+				DTA_Alpha, MenuAlpha, TAG_DONE);//[GEC]
 		}
 	}
 }

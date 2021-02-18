@@ -2839,4 +2839,72 @@ DEFINE_CLASS_PROPERTY(unmorphflash, S, PowerMorph)
 	defaults->UnMorphFlash = FName(str);
 }
 
+//==========================================================================
+//[GEC] weapon scale x
+//==========================================================================
+DEFINE_CLASS_PROPERTY(resh, F, Weapon)
+{
+	PROP_FIXED_PARM(i, 0);
+	defaults->W_RESH = i;
+}
 
+//==========================================================================
+//[GEC] weapon scale y
+//==========================================================================
+DEFINE_CLASS_PROPERTY(resw, F, Weapon)
+{
+	PROP_FIXED_PARM(i, 0);
+	defaults->W_RESW = i;
+}
+
+//==========================================================================
+//[GEC] Weapon FlashRenderStyle
+//==========================================================================
+DEFINE_CLASS_PROPERTY(flashrenderstyle, S, Weapon)
+{
+	PROP_STRING_PARM(str, 0);
+	static const char * renderstyles[]={
+		"NONE", "NORMAL", "FUZZY", "SOULTRANS", "OPTFUZZY", "STENCIL", 
+		"TRANSLUCENT", "ADD", "SHADED", "SHADOW", "SUBTRACT", "ADDSTENCIL", "ADDSHADED", NULL };
+
+	static const int renderstyle_values[]={
+		STYLE_None, STYLE_Normal, STYLE_Fuzzy, STYLE_SoulTrans, STYLE_OptFuzzy,
+			STYLE_TranslucentStencil, STYLE_Translucent, STYLE_Add, STYLE_Shaded,
+			STYLE_Shadow, STYLE_Subtract, STYLE_AddStencil, STYLE_AddShaded};
+
+	// make this work for old style decorations, too.
+	if (!strnicmp(str, "style_", 6)) str+=6;
+
+	int style = MatchString(str, renderstyles);
+	if (style < 0) I_Error("Unknown render style '%s'", str);
+
+	defaults->FlashRenderStyle = style;
+}
+
+//==========================================================================
+//[GEC] Weapon FlashAlpha
+//==========================================================================
+DEFINE_CLASS_PROPERTY(flashalpha, F, Weapon)
+{
+	PROP_FIXED_PARM(alpha, 0);
+	defaults->Flash_Alpha = alpha;
+}
+
+//==========================================================================
+//[GEC]
+//==========================================================================
+DEFINE_CLASS_PROPERTY_PREFIX(player, LandingSpeed, F, PlayerPawn)
+{
+	PROP_FIXED_PARM(z, 0);
+	defaults->LandingSpeed = z;
+}
+
+//==========================================================================
+//[GEC]
+//==========================================================================
+DEFINE_CLASS_PROPERTY_PREFIX(player, MoveBob, F, PlayerPawn)
+{
+	PROP_FIXED_PARM(z, 0);
+	defaults->MoveBob = z;
+	defaults->MoveBob_ = true;
+}

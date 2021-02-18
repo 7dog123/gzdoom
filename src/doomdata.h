@@ -165,6 +165,35 @@ enum ELineFlags
 	ML_3DMIDTEX_IMPASS			= 0x10000000,	// [TP] if 3D midtex, behaves like a height-restricted ML_BLOCKING
 };
 
+//-----[GEC]_STUFF-----STR//
+#define SWITCHMASK(x)           (x & 0x6000)
+
+enum ELineGecFlags
+{
+	ML_PEG_UPPER_WALL_COLOR		= 0x00000001,
+	ML_PEG_LOWER_WALL_COLOR		= 0x00000002,
+	ML_FLIP_UPPER_PEGGED_COLOR	= 0x00000004,
+	ML_USE_MULTICOLORS			= 0x00000008,
+	ML_UV_WRAP_H_MIRROR			= 0x00000010,
+	ML_UV_WRAP_V_MIRROR			= 0x00000020,
+	ML_NO_OCCLUSION				= 0x00000040,
+	ML_NO_RENDERMIDTEX			= 0x00000080,
+	ML_SCROLL_WALL_RIGHT		= 0x00000100,	//
+	ML_SCROLL_WALL_LEFT			= 0x00000200,	//
+	ML_SCROLL_WALL_UP			= 0x00000400,	//
+	ML_SCROLL_WALL_DOWN			= 0x00000800,	//
+	ML_DONTPEGMIDDLE			= 0x00001000,	// [GEC] Nuevo middle texture unpegged
+	ML_SWITCHX02				= 0x00002000,   // Switch flag 1
+	ML_SWITCHX04				= 0x00004000,   // Switch flag 2
+	ML_SWITCHX08				= 0x00008000,   // Switch flag 3
+	ML_CHECKFLOORHEIGHT			= 0x00010000,   // if true then check the switch's floor height, else use the ceiling height
+
+	// [GEC] Nuevo
+	ML_VERTICALDOOR				= 0x00020000,
+	ML_SKY_HACK_CONSOLE			= 0x00040000,
+	ML_ALPHA_TEST				= 0x00080000,
+	ML_NOSWITCHANIMATE			= 0x00100000,
+};
 
 // Special activation types
 enum SPAC
@@ -404,7 +433,7 @@ enum EMapThingFlags
 	MTF_STRIFESOMETHING	= 0x8000,
 
 	MTF_SECRET			= 0x080000,	// Secret pickup
-	MTF_NOINFIGHTING	= 0x100000,
+	MTF_NOINFIGHTING	= 0x100000, // [GEC] Le doy uso a esto
 
 	// BOOM and DOOM compatible versions of some of the above
 

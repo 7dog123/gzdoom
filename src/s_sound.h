@@ -226,7 +226,7 @@ void S_CacheSound (sfxinfo_t *sfx);
 
 // Start sound for thing at <ent>
 void S_Sound (int channel, FSoundID sfxid, float volume, float attenuation);
-void S_Sound (AActor *ent, int channel, FSoundID sfxid, float volume, float attenuation);
+void S_Sound (AActor *ent, int channel, FSoundID sfxid, float volume, float attenuation, bool forcereverb = false);//[GEC]
 void S_SoundMinMaxDist (AActor *ent, int channel, FSoundID sfxid, float volume, float mindist, float maxdist);
 void S_Sound (const FPolyObj *poly, int channel, FSoundID sfxid, float volume, float attenuation);
 void S_Sound (const sector_t *sec, int channel, FSoundID sfxid, float volume, float attenuation);
@@ -317,6 +317,9 @@ bool S_StartMusic (const char *music_name);
 
 // Start music using <music_name>, and set whether looping
 bool S_ChangeMusic (const char *music_name, int order=0, bool looping=true, bool force=false);
+
+// [GEC] Check Music Playing
+bool S_CheckMusicPlaying ();
 
 // Start playing a cd track as music
 bool S_ChangeCDMusic (int track, unsigned int id=0, bool looping=true);

@@ -118,7 +118,7 @@ fixed_t sector_t::FindHighestFloorSurrounding (vertex_t **v) const
 	if (linecount == 0) return GetPlaneTexZ(sector_t::floor);
 
 	spot = lines[0]->v1;
-	floor = FIXED_MIN;
+	floor = -500*FRACUNIT;//FIXED_MIN;//[GEC] Original Doom
 
 	for (i = 0; i < linecount; i++)
 	{

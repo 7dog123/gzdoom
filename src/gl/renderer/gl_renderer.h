@@ -24,6 +24,9 @@ enum SectorRenderFlags
 	SSRF_RENDERALL = 7,
 	SSRF_PROCESSED = 8,
 	SSRF_SEEN = 16,
+
+	SSRF_WATER1 = 32,// [GEC]
+	SSRF_WATER2 = 64,// [GEC]
 };
 
 struct GL_IRECT
@@ -60,6 +63,8 @@ public:
 	FTexture *glpart;
 	FTexture *mirrortexture;
 	FTexture *gllight;
+	FTexture *psx_light_wall;//[GEC] Nuevo
+	FTexture *psx_light_plane;//[GEC] Nuevo
 
 	float mSky1Pos, mSky2Pos;
 
@@ -89,7 +94,8 @@ public:
 	void DrawScene(bool toscreen = false);
 	void DrawBlend(sector_t * viewsector);
 
-	void DrawPSprite (player_t * player,pspdef_t *psp,fixed_t sx, fixed_t sy, int cm_index, bool hudModelStep, int OverrideShader);
+	void SetSpecials(FMaterial * tex, int cm_index);//[GEC]
+	void DrawPSprite (player_t * player,pspdef_t *psp,fixed_t sx, fixed_t sy, int cm_index, bool hudModelStep, int OverrideShader,bool fullbright = false);
 	void DrawPlayerSprites(sector_t * viewsector, bool hudModelStep);
 	void DrawTargeterSprites();
 
@@ -126,6 +132,10 @@ public:
 	void FillSimplePoly(FTexture *texture, FVector2 *points, int npoints,
 		double originx, double originy, double scalex, double scaley,
 		angle_t rotation, FDynamicColormap *colormap, int lightlevel);
+
+	void DrawFireTexture(FTexture *img, DCanvas::DrawParms &parms);//[GEC]
+	void R_InitFirePSX_(void);//[GEC]
+	void R_FirePSXTicker_(bool fireout);//[GEC]
 };
 
 // Global functions. Make them members of GLRenderer later?

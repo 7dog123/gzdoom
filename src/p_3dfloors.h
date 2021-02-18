@@ -72,6 +72,7 @@ struct F3DFloor
 		const FTextureID *	texture;
 		const fixed_t *		texheight;
 		sector_t *		model;
+		PalEntry *		flatcolor;//[GEC] GZdoom 2.4
 		int				isceiling;
 		int				vindex;
 		bool			copied;

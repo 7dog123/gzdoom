@@ -376,6 +376,21 @@ enum ActorFlag7
 	MF7_ICESHATTER		= 0x00200000,	// [MC] Shatters ice corpses regardless of damagetype.
 };
 
+// --- mobj.flags8 ---
+enum ActorFlag8
+{
+	MF8_MOVECOUNTD64			= 0x00000001,	// [GEC] Doom 64 MoveCountMode
+	MF8_WAITLOOK				= 0x00000002,	// [GEC] Doom psx wait view
+	MF8_TRIGGERINCHASEONLY		= 0x00000004,	// [GEC] Doom psx & Doom64 monsters in chase execute triggers
+	MF8_SEETARGET				= 0x00000008,	// [GEC] Doom psx & Doom64 Reset Idle State
+	MF8_RENDERLASER				= 0x00000010,	// [GEC] Doom psx & Doom64 Reset Idle State
+	MF8_NOREMOVE				= 0x00000020,	// [GEC] Nuevo No Remove Flag
+	MF8_NODRAWMAP				= 0x00000040,	// [GEC] Nuevo Never draw in automap
+	MF8_NODMGTHRUSTZ			= 0x00000080,	// [GEC] Don't Thrust Z
+	MF8_NOCOUNTSECRET			= 0x00000100,	// [GEC] Force No Count Secret
+	MF8_NOBLOCKSKULLFLY			= 0x00000200,	// [GEC] No Block on SKULLFLY State
+}; 
+
 // --- mobj.renderflags ---
 enum ActorRenderFlag
 {
@@ -497,6 +512,7 @@ typedef TFlags<ActorFlag4> ActorFlags4;
 typedef TFlags<ActorFlag5> ActorFlags5;
 typedef TFlags<ActorFlag6> ActorFlags6;
 typedef TFlags<ActorFlag7> ActorFlags7;
+typedef TFlags<ActorFlag8> ActorFlags8;//[GEC]
 typedef TFlags<ActorRenderFlag> ActorRenderFlags;
 typedef TFlags<ActorBounceFlag, WORD> ActorBounceFlags;
 DEFINE_TFLAGS_OPERATORS (ActorFlags)
@@ -506,6 +522,7 @@ DEFINE_TFLAGS_OPERATORS (ActorFlags4)
 DEFINE_TFLAGS_OPERATORS (ActorFlags5)
 DEFINE_TFLAGS_OPERATORS (ActorFlags6)
 DEFINE_TFLAGS_OPERATORS (ActorFlags7)
+DEFINE_TFLAGS_OPERATORS (ActorFlags8)//[GEC]
 DEFINE_TFLAGS_OPERATORS (ActorRenderFlags)
 DEFINE_TFLAGS_OPERATORS (ActorBounceFlags)
 
@@ -830,7 +847,7 @@ public:
 	}
 
 	// These also set CF_INTERPVIEW for players.
-	void SetPitch(int p, bool interpolate, bool forceclamp = false);
+	void SetPitch(int p, bool interpolate, bool forceclamp = false, bool recoil = false);//[GEC]
 	void SetAngle(angle_t ang, bool interpolate);
 	void SetRoll(angle_t roll, bool interpolate);
 
@@ -1029,6 +1046,8 @@ public:
 	ActorFlags5		flags5;			// OMG! We need another one.
 	ActorFlags6		flags6;			// Shit! Where did all the flags go?
 	ActorFlags7		flags7;			// WHO WANTS TO BET ON 8!?
+	ActorFlags8		flags8;			// [GEC] Más nuevos flags?
+	fixed_t			recoilpitch;	// [GEC] From Doom64 Ex
 
 	// [BB] If 0, everybody can see the actor, if > 0, only members of team (VisibleToTeam-1) can see it.
 	DWORD			VisibleToTeam;
@@ -1170,6 +1189,12 @@ public:
 	static void ClearTIDHashes ();
 	void AddToHash ();
 	void RemoveFromHash ();
+
+	//[GEC]Esto solo es para el laser
+	bool RenderLaser;
+	TVector3<double> LaserStart;
+	TVector3<double> LaserEnd;
+	angle_t LaserAngle;
 
 private:
 	static AActor *TIDHash[128];
@@ -1442,5 +1467,101 @@ inline fixedvec3 PosRelative(const fixedvec3 &pos, line_t *line, sector_t *refse
 void PrintMiscActorInfo(AActor * query);
 
 #define S_FREETARGMOBJ	1
+
+//===========================================================================
+//
+// [GEC] Nuevas Acciones
+//
+//===========================================================================
+
+// We need the thinker_t stuff.
+#include "dthinker.h"
+
+class P_FadeMobj : public DThinker //[GEC] P_FadeMobj D64
+{
+	DECLARE_CLASS (P_FadeMobj, DThinker)
+public:
+	P_FadeMobj (AActor *self, fixed_t amount, fixed_t alpha, int flags, bool remove, bool recopy);
+	void	Serialize (FArchive &arc);
+	void	Tick ();
+protected:
+	void Destroy();
+	AActor *m_self;
+	fixed_t m_amount;
+    fixed_t m_destAlpha;
+    int m_flagReserve;
+	bool m_remove;
+private:
+	P_FadeMobj ();
+};
+
+class T_MobjExplode : public DThinker //[GEC] T_MobjExplode D64
+{
+	DECLARE_CLASS (T_MobjExplode, DThinker)
+public:
+	T_MobjExplode (AActor *self, const PClass *type, int delaydraw, int drawcount);
+	void	Serialize (FArchive &arc);
+	void	Tick ();
+protected:
+	void Destroy();
+	AActor *m_self;
+	const PClass *m_type;
+	int m_delay;
+    int m_lifetime;
+    int m_delaymax;
+private:
+	T_MobjExplode ();
+};
+
+class T_LaserThinker : public DThinker //[GEC] T_LaserThinker D64
+{
+	DECLARE_CLASS (T_LaserThinker, DThinker)
+public:
+	T_LaserThinker(AActor *self, const PClass *laser, const PClass *puff, fixed_t spawnheight, angle_t angle, fixed_t range);
+	void	Serialize (FArchive &arc);
+	void	Tick ();
+protected:
+	void Destroy();
+	AActor *m_dest;
+	AActor *m_lasermarker;
+	fixed_t m_x1;
+    fixed_t m_y1;
+    fixed_t m_z1;
+    fixed_t m_x2;
+    fixed_t m_y2;
+    fixed_t m_z2;
+    fixed_t m_slopex;
+    fixed_t m_slopey;
+    fixed_t m_slopez;
+    fixed_t m_dist;
+    fixed_t m_distmax;
+	int		m_speed;
+	angle_t m_angle;
+	//laser_t m_laser;
+private:
+	T_LaserThinker ();
+};
+
+class P_SetMovingCamera : public DThinker //[GEC] P_SetMovingCamera D64
+{
+	DECLARE_CLASS (P_SetMovingCamera, DThinker)
+public:
+	P_SetMovingCamera (int tag);
+	void	Serialize (FArchive &arc);
+	void	Tick ();
+protected:
+	void Destroy();
+	fixed_t m_x;
+    fixed_t m_y;
+    fixed_t m_z;
+    fixed_t m_slopex;
+    fixed_t m_slopey;
+    fixed_t m_slopez;
+    player_t* m_player;
+    int m_current;
+    int m_tic;
+private:
+	P_SetMovingCamera ();
+};
 
 #endif // __P_MOBJ_H__

@@ -63,10 +63,329 @@
 #include "gl/utility/gl_clock.h"
 #include "gl/utility/gl_convert.h"
 #include "gl/utility/gl_templates.h"
+#include "gl/textures/gl_combiners.h"//[GEC]
 
 #ifdef _DEBUG
 CVAR(Int, gl_breaksec, -1, 0)
 #endif
+
+//==========================================================================
+//
+// [GEC]
+//
+//==========================================================================
+static GLuint SoftLightFlat = -1;
+static int lastenvcolor = 0;
+static int lastlightlevel = 0;
+
+static unsigned int generate_softlightflat(int color, int distan)
+{
+    int i;
+	int W = 1;
+	int H = 400;
+	byte *buffer;
+	int li = 0;
+	int l = 0;
+	int k = 0;
+	byte lightpalette[400];
+
+	if(lastenvcolor == color) 
+	{
+		glBindTexture( GL_TEXTURE_2D, SoftLightFlat);
+        return SoftLightFlat;
+    }
+
+	glDeleteTextures(1, &SoftLightFlat);
+
+    lastenvcolor    = color;
+
+	buffer = (byte *)calloc(sizeof(byte),(W*H));
+	memset(buffer, 0xff, sizeof(byte) * (W*H));
+
+	li = 200;
+	for (i = 0;i < 200; i++)
+	{
+		lightpalette[i] = PSXDoomLightingEquation(color/255.0, li, 1);
+		li--;
+	}
+	li = 0;
+	for (i = 200;i < 400; i++)//H
+	{
+		lightpalette[i] = PSXDoomLightingEquation(color/255.0, li, 1);
+		li++;
+	}
+
+	int count = 0;
+	for(i = 0; i < H; i++)
+	{
+		buffer[count] = (unsigned char)(lightpalette[i] & 0xff);
+		count++;
+	}
+
+	if(SoftLightFlat == 0)
+		glGenTextures(1, &SoftLightFlat);
+
+    glBindTexture( GL_TEXTURE_2D, SoftLightFlat);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+	glTexImage2D( GL_TEXTURE_2D, 0, GL_RGBA8, W, H, 0, GL_LUMINANCE, GL_UNSIGNED_BYTE, buffer);
+
+	free (buffer);
+	return SoftLightFlat;
+}
+
+Vector nearPt2, up, right, t1;
+float scale;
+float Dist;
+
+void GLFlat::GetLightPSX()
+{
+	Plane p;
+
+	player_t *player = &players[consoleplayer];
+	fixed_t planeh = plane.plane.ZatPoint(player->camera);//[GEC]
+	p.Set(plane.plane);
+
+	if (((planeh<viewz && ceiling) || (planeh>viewz && !ceiling)))
+	{
+		return;
+	}
+
+	Vector fn, pos;
+
+	float x = FIXED2FLOAT(viewx);
+	float y = FIXED2FLOAT(viewy);
+	float z = FIXED2FLOAT(viewz);
+	z = FIXED2FLOAT(planeh);
+
+	float dist = fabsf(p.DistToPoint(x, z, y));
+	Dist = fabsf(p.DistToPoint(x, FIXED2FLOAT(viewz), y));
+	float radius = (200);//Floor
+
+	if (radius <= 0.f) return;
+	if (dist > radius) return;
+	if (p.PointOnSide(x, z, y))
+	{
+		return;
+	}
+
+	scale = 1.0f / ((2.f * radius) - dist);
+
+	pos.Set(x,z,y);
+	fn=p.Normal();
+	fn.GetRightUp(right, up);
+
+	#ifdef _MSC_VER
+		nearPt2 = pos + fn * dist;
+	#else
+		Vector tmpVec = fn * dist;
+		nearPt = pos + tmpVec;
+	#endif
+
+	float angle;
+	angle = ANGLE_TO_FLOAT(viewangle);
+
+	// Render the light
+	right.SetX(1.0);
+	right.SetY(0.0);
+	right.SetZ(0.0);
+	up.SetX(0.0);
+	up.SetY(0.0);
+	up.SetZ(-1.0);
+}
+
+int SetTexNum = GL_TEXTURE0;
+//==========================================================================
+//
+// [GEC] Aply blends and PSX LIGHT
+//
+//==========================================================================
+
+void GLFlat::SetSpecials(int pass, int light, int rellight, int lightlevel64)//[GEC]
+{
+	/*if(pass == GLPASS_TEXTURE)
+	{
+		light = 0;
+		rellight = 0;
+	}*/
+
+	int texturemode;//[GEC]
+	gl_RenderState.GetTextureMode(&texturemode);
+
+	//Pass 1: Light64
+	if(pass == GLPASS_ALL || pass == GLPASS_PLAIN || pass == GLPASS_TEXTURE)
+	{
+		if(!gl_fixedcolormap)
+			gl_RenderState.SetLight64(lightlevel64);//[GEC]
+		else
+			gl_RenderState.SetLight64(0);//[GEC]
+	}
+
+	//Pass 2: Blend Psx if true
+	if(pass == GLPASS_ALL || pass == GLPASS_PLAIN || pass == GLPASS_TEXTURE)
+	{
+		if(psx_blend)
+		{
+			gl_RenderState.SetBlendColor(flashcolor, 0);
+		}
+	}
+
+	//Pass 4: Light Software
+	if(pass == GLPASS_ALL || pass == GLPASS_PLAIN || pass == GLPASS_BASE_MASKED)
+	{
+		if(glset.lightmode == 16 && (!gl_fixedcolormap))
+			gl_RenderState.SetLightMode(2);//[GEC]
+	}
+
+	//Pass 5: Blend D64 if false
+	if(pass == GLPASS_ALL || pass == GLPASS_PLAIN)
+	if(!psx_blend)
+	{
+		gl_RenderState.SetBlendColor(flashcolor, 1);
+	}
+
+	//Pass 6: SetSuperBright
+	if(pass == GLPASS_ALL || pass == GLPASS_PLAIN || pass == GLPASS_TEXTURE)
+	{
+		if(glset.lightmode == 16 && (!gl_fixedcolormap))
+			gl_RenderState.SetPsxBrightLevel(255);//[GEC]
+	}
+
+	gl_RenderState.Apply();//[GEC]
+
+	int texnum = 0;
+	if ((gl.shadermodel < 4))
+	{
+		//Pass 0: Base Textrue
+		SetTextureUnit(0, true);
+
+		texnum ++;
+		gltexture->Bind(Colormap.colormap,0,0,0,texnum);
+		SetTextureUnit(texnum, true);
+		SetTextureMode(texturemode);
+
+		//Pass 1: Light64
+		if(pass == GLPASS_PLAIN || pass == GLPASS_TEXTURE)
+		{
+			texnum ++;
+			gltexture->Bind(Colormap.colormap,0,0,0,texnum);
+			SetTextureUnit(texnum, true);
+			if(!gl_fixedcolormap)
+				SetLight64(lightlevel64);
+			else
+				SetLight64(0);
+		}
+
+		//Pass 2: Blend Psx if true
+		if(pass == GLPASS_PLAIN || pass == GLPASS_TEXTURE)
+		{
+			if(psx_blend)
+			{
+				texnum ++;
+				gltexture->Bind(Colormap.colormap,0,0,0,texnum);
+				SetTextureUnit(texnum, true);
+				SetBlend(flashcolor, GL_INTERPOLATE);
+				if(APART(flashcolor) == 0)(SetBlend(flashcolor, GL_ADD));
+			}
+		}
+
+		//Pass 3: SetColor
+		if(pass == GLPASS_PLAIN || pass == GLPASS_TEXTURE || pass == GLPASS_BASE_MASKED)//|| (pass == GLPASS_BASE_MASKED && glset.lightmode == 16)
+		{
+			texnum ++;
+			gltexture->Bind(Colormap.colormap,0,0,0,texnum);
+			SetTextureUnit(texnum, true);
+			SetCombineColor();
+		}
+
+		//Pass 4: Light Software
+		if(pass == GLPASS_TEXTURE)
+		{
+			texnum ++;
+			gltexture->Bind(Colormap.colormap,0,0,0,texnum);
+			SetTextureUnit(texnum, true);
+			SetColor(0xff, 0xff, 0xff, 0xff);
+		}
+
+		if(pass == GLPASS_PLAIN || pass == GLPASS_BASE_MASKED)
+		if(glset.lightmode == 16)
+		{
+			texnum ++;
+			SetTexNum = GL_TEXTURE0+texnum;
+			Enable_texunit(texnum);
+			int newlight = gl_CalcLightLevel(light, rellight, false);
+			if(!gl_fixedcolormap)
+			{
+				//glBindTexture(GL_TEXTURE_2D, generate_softlight(newlight, 0));
+				generate_softlightflat(newlight, 0);
+				GetLightPSX();
+				glMatrixMode(GL_TEXTURE);
+				glLoadIdentity();
+				glTranslatef(0.5,0.5,0.0);
+				glRotatef(ANGLE_TO_FLOAT(viewangle)-90.0,0.0,0.0,1.0);
+				glTranslatef(-0.5,-0.5,0.0);
+				glMatrixMode(GL_PROJECTION);
+
+				glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_COMBINE);
+				glTexEnvi(GL_TEXTURE_ENV, GL_COMBINE_RGB, GL_MODULATE);   //Modulate RGB with RGB
+				glTexEnvi(GL_TEXTURE_ENV, GL_SOURCE0_RGB, GL_PREVIOUS);
+				glTexEnvi(GL_TEXTURE_ENV, GL_OPERAND0_RGB, GL_SRC_COLOR);
+				glTexEnvi(GL_TEXTURE_ENV, GL_SOURCE1_RGB, GL_TEXTURE0 + texnum);
+				glTexEnvi(GL_TEXTURE_ENV, GL_OPERAND1_RGB, GL_SRC_COLOR);
+			}
+			else
+			{
+				SetTexNum = GL_TEXTURE0;
+				gltexture->Bind(Colormap.colormap,0,0,0,texnum);
+				SetTextureUnit(texnum, true);
+				SetColor(0xff, 0xff, 0xff, 0xff);
+			}
+		}
+
+		//Pass 5: Blend D64 if false
+		if(pass == GLPASS_TEXTURE)
+		{
+			texnum ++;
+			gltexture->Bind(Colormap.colormap,0,0,0,texnum);
+			SetTextureUnit(texnum, true);
+			SetColor(0xff, 0xff, 0xff, 0xff);
+		}
+
+		if(pass == GLPASS_PLAIN)
+		{
+			if(!psx_blend)
+			{
+				texnum ++;
+				gltexture->Bind(Colormap.colormap,0,0,0,texnum);
+				SetTextureUnit(texnum, true);
+				SetBlend(flashcolor, GL_ADD);
+			}
+		}
+
+		//Pass 6: SetSuperBright
+		if(pass == GLPASS_PLAIN || pass == GLPASS_TEXTURE)
+		{
+			if(glset.lightmode == 16)
+			{
+				if (!gl_fixedcolormap)
+				{
+					texnum ++;
+					gltexture->Bind(Colormap.colormap,0,0,0,texnum);
+					SetTextureUnit(texnum, true);
+					SetPSXSuperBright(255);
+				}
+			}
+		}
+
+		SetCombineAlpha();
+		SetTextureUnit(0, true);
+	}
+}
+
 //==========================================================================
 //
 // Sets the texture matrix according to the plane's texture positioning
@@ -152,6 +471,10 @@ void GLFlat::DrawSubsectorLights(subsector_t * sub, int pass)
 			continue;
 		}
 		draw_dlightf++;
+
+		//[GEC]
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
 		// Render the light
 		glBegin(GL_TRIANGLE_FAN);
@@ -241,19 +564,40 @@ bool GLFlat::SetupSubsectorLights(bool lightsapplied, subsector_t * sub)
 
 void GLFlat::DrawSubsector(subsector_t * sub)
 {
-	glBegin(GL_TRIANGLE_FAN);
+	/*glBegin(GL_TRIANGLE_FAN);
 
 	for(unsigned int k=0; k<sub->numlines; k++)
 	{
 		vertex_t *vt = sub->firstline[k].v1;
 		glTexCoord2f(vt->fx/64.f, -vt->fy/64.f);
 		float zc = plane.plane.ZatPoint(vt->fx, vt->fy) + dz;
+		if (renderflags & SSRF_WATER2) {zc += 0.5;}//[GEC]
 		glVertex3f(vt->fx, zc, vt->fy);
 	}
 	glEnd();
 
 	flatvertices += sub->numlines;
-	flatprimitives++;
+	flatprimitives++;*/
+
+	glBegin(GL_TRIANGLE_FAN);
+
+	for(unsigned int k=0; k<sub->numlines; k++)
+	{
+		vertex_t *vt = sub->firstline[k].v1;
+		//glTexCoord2f(vt->fx/64.f, -vt->fy/64.f);
+		float zc = plane.plane.ZatPoint(vt->fx, vt->fy) + dz;
+		glMultiTexCoord2f(GL_TEXTURE0, vt->fx/64.f, -vt->fy/64.f);
+		if (renderflags & SSRF_WATER2) {zc += 0.5;}//[GEC]
+
+		if(SetTexNum != GL_TEXTURE0)
+		{
+			t1.Set(vt->fx, zc, vt->fy);
+			Vector nearToVert = t1 - nearPt2;
+			glMultiTexCoord2f(SetTexNum, (nearToVert.Dot(right) * scale) + 0.5f, (nearToVert.Dot(up) * scale) + 0.5f);
+		}
+		glVertex3f(vt->fx, zc, vt->fy);
+	}
+	glEnd();
 }
 
 //==========================================================================
@@ -337,6 +681,10 @@ void GLFlat::Draw(int pass)
 	int i;
 	int rel = getExtraLight();
 
+	int texturemode;//[GEC]
+	gl_RenderState.ResetSpecials();//[GEC]
+	gl_RenderState.Apply();//[GEC]
+
 #ifdef _DEBUG
 	if (sector->sectornum == gl_breaksec)
 	{
@@ -344,6 +692,14 @@ void GLFlat::Draw(int pass)
 	}
 #endif
 
+	if (pass == GLPASS_PLAIN || pass == GLPASS_ALL || pass == GLPASS_TRANSLUCENT || pass == GLPASS_BASE_MASKED || pass == GLPASS_TEXTURE)
+	{
+		// water layer 1 //[GEC]
+		if (renderflags & SSRF_WATER1) { plane.xoffs += (scrollfrac >> 6) * gltexture->TextureWidth(GLUSE_TEXTURE); }
+
+		// water layer 2 //[GEC]
+		if (renderflags & SSRF_WATER2) { plane.yoffs -= (scrollfrac >> 6) * gltexture->TextureHeight(GLUSE_TEXTURE); }
+	}
 
 	switch (pass)
 	{
@@ -361,13 +717,61 @@ void GLFlat::Draw(int pass)
 		// fall through
 	case GLPASS_TEXTURE:
 	{
+		//[GEC]
+		
+		//SetInitSpecials(texturemode, glset.lightmode, lightlevel, 0, sector->lightlevel_64, false, FragCol, DynCol);
+
 		gltexture->Bind(Colormap.colormap);
+		SetSpecials(pass, lightlevel, rel, sector->lightlevel_64);//[GEC]
+		//SetNewSpecials(gltexture, Colormap.colormap, false, false, true, false, pass);//[GEC]
+
 		bool pushed = gl_SetPlaneTextureRotation(&plane, gltexture);
 		DrawSubsectors(pass, false);
 		if (pushed) 
 		{
 			glPopMatrix();
 			glMatrixMode(GL_MODELVIEW);
+		}
+
+		//[GEC] Reset default
+		Disable_texunits();
+		gl_RenderState.GetTextureMode(&texturemode);
+		gl_RenderState.SetTextureMode(texturemode);
+		break;
+	}
+
+	case GLPASS_TEXBlEND:
+	{
+		if (flashcolor != 0)
+		{
+			if (!psx_blend)
+			{
+				gl_RenderState.SetTextureMode(TM_MASK);
+				gl_RenderState.ResetSpecials();//[GEC]
+				if (gl.shadermodel < 4)//[GEC] NO usa Fog en Shader mode
+				{
+					gl_SetFog(lightlevel, rel, &Colormap, true);
+				}
+
+				PalEntry Flashcolor = flashcolor;
+				if(glset.lightmode == 16)
+				{
+					Flashcolor.r = clamp(Flashcolor.r * 2, 0, 255);
+					Flashcolor.g = clamp(Flashcolor.g * 2, 0, 255);
+					Flashcolor.b = clamp(Flashcolor.b * 2, 0, 255);
+					Flashcolor.a = clamp(Flashcolor.a * 2, 0, 255);
+				}
+
+				glColor4f((Flashcolor.r / 255.0f), (Flashcolor.g / 255.0f), (Flashcolor.b / 255.0f), 1.0);
+				gltexture->Bind(Colormap.colormap);
+				bool pushed = gl_SetPlaneTextureRotation(&plane, gltexture);
+				DrawSubsectors(pass, false);
+				if (pushed) 
+				{
+					glPopMatrix();
+					glMatrixMode(GL_MODELVIEW);
+				}
+			}
 		}
 		break;
 	}
@@ -426,6 +830,8 @@ void GLFlat::Draw(int pass)
 		{
 			if (foggy) gl_RenderState.EnableBrightmap(false);
 			gltexture->Bind(Colormap.colormap);
+			SetSpecials(GLPASS_PLAIN, lightlevel, rel, sector->lightlevel_64);//[GEC]
+
 			bool pushed = gl_SetPlaneTextureRotation(&plane, gltexture);
 			DrawSubsectors(pass, true);
 			gl_RenderState.EnableBrightmap(true);
@@ -434,6 +840,11 @@ void GLFlat::Draw(int pass)
 				glPopMatrix();
 				glMatrixMode(GL_MODELVIEW);
 			}
+
+			//[GEC] Reset default
+			Disable_texunits();
+			gl_RenderState.GetTextureMode(&texturemode);
+			gl_RenderState.SetTextureMode(texturemode);
 		}
 		if (renderstyle==STYLE_Add) gl_RenderState.BlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 		break;
@@ -502,7 +913,7 @@ inline void GLFlat::PutFlat(bool fog)
 //
 //==========================================================================
 
-void GLFlat::Process(sector_t * model, int whichplane, bool fog)
+void GLFlat::Process(sector_t * model, int whichplane, bool fog, int nexttexture)
 {
 	plane.GetFromSector(model, whichplane);
 
@@ -510,7 +921,7 @@ void GLFlat::Process(sector_t * model, int whichplane, bool fog)
 	{
 		if (plane.texture==skyflatnum) return;
 
-		gltexture=FMaterial::ValidateTexture(plane.texture, true);
+		gltexture=FMaterial::ValidateTexture(plane.texture + nexttexture, true);//[GEC]
 		if (!gltexture) return;
 		if (gltexture->tex->isFullbright()) 
 		{
@@ -604,6 +1015,8 @@ void GLFlat::ProcessSector(sector_t * frontsector)
 
 		lightlevel = gl_ClampLight(frontsector->GetFloorLight());
 		Colormap=frontsector->ColorMap;
+		Colormap.LightColorMul(frontsector->SpecialColors[sector_t::floor]);//[GEC]
+
 		if ((stack = (frontsector->portals[sector_t::floor] != NULL)))
 		{
 			gl_drawinfo->AddFloorStack(sector);
@@ -637,7 +1050,23 @@ void GLFlat::ProcessSector(sector_t * frontsector)
 			Colormap.CopyLightColor(light->extra_colormap);
 		}
 		renderstyle = STYLE_Translucent;
-		if (alpha!=0.0f) Process(frontsector, false, false);
+
+		if (frontsector->Flags & SECF_LIQUIDFLOOR)// [GEC]
+		{
+			renderflags |= SSRF_WATER1;
+			Process(frontsector, sector_t::floor, false, 1);// [GEC] Encuentra la siguiente textura
+			renderflags &= ~SSRF_WATER1;
+
+			renderflags |= SSRF_WATER2;
+			alpha = (0.627451 * alpha) / 1.0;//Equivale a 0xA0
+			Process(frontsector, sector_t::floor, false);
+			renderflags &= ~SSRF_WATER2;
+
+		}
+		else
+		{
+			if (alpha!=0.0f) Process(frontsector, false, false);
+		}
 	}
 	
 	//
@@ -655,6 +1084,8 @@ void GLFlat::ProcessSector(sector_t * frontsector)
 
 		lightlevel = gl_ClampLight(frontsector->GetCeilingLight());
 		Colormap=frontsector->ColorMap;
+		Colormap.LightColorMul(frontsector->SpecialColors[sector_t::ceiling]);//[GEC]
+
 		if ((stack = (frontsector->portals[sector_t::ceiling] != NULL))) 
 		{
 			gl_drawinfo->AddCeilingStack(sector);

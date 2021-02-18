@@ -67,7 +67,9 @@ void DDoor::Serialize (FArchive &arc)
 		<< m_Direction
 		<< m_TopWait
 		<< m_TopCountdown
-		<< m_LightTag;
+		<< m_LightTag
+		//[GEC] D64 Vertical Door
+		<< m_SplitDoor;
 }
 
 //============================================================================
@@ -79,8 +81,9 @@ void DDoor::Serialize (FArchive &arc)
 void DDoor::Tick ()
 {
 	EResult res;
+	EResult res2;
 
-	if (m_Sector->floorplane.d != m_OldFloorDist)
+	if ((m_Sector->floorplane.d != m_OldFloorDist)&&(!m_SplitDoor))
 	{
 		if (!m_Sector->floordata || !m_Sector->floordata->IsKindOf(RUNTIME_CLASS(DPlat)) ||
 			!(barrier_cast<DPlat*>(m_Sector->floordata))->IsLift())
@@ -135,7 +138,15 @@ void DDoor::Tick ()
 		
 	case -1:
 		// DOWN
-		res = MoveCeiling (m_Speed, m_BotDist, -1, m_Direction, false);
+		if(!m_SplitDoor)//[GEC]
+		{
+			res = res2 = MoveCeiling (m_Speed, m_BotDist, -1, m_Direction, false);
+		}
+		else
+		{
+			res = MoveCeiling (m_Speed, m_OldFloorDist, -1, -1, false);
+			res2 = MoveFloor (m_Speed, -m_OldFloorDist, -1,  1, false);
+		}
 
 		// killough 10/98: implement gradual lighting effects
 		if (m_LightTag != 0 && m_TopDist != -m_Sector->floorplane.d)
@@ -144,7 +155,8 @@ void DDoor::Tick ()
 				m_TopDist + m_Sector->floorplane.d));
 		}
 
-		if (res == pastdest)
+		//if (res == pastdest)
+		if (res == pastdest && res2 == pastdest)
 		{
 			SN_StopSequence (m_Sector, CHAN_CEILING);
 			switch (m_Type)
@@ -181,7 +193,15 @@ void DDoor::Tick ()
 		
 	case 1:
 		// UP
-		res = MoveCeiling (m_Speed, m_TopDist, -1, m_Direction, false);
+		if(!m_SplitDoor)//[GEC]
+		{
+			res = res2 = MoveCeiling (m_Speed, m_TopDist, -1, m_Direction, false);
+		}
+		else
+		{
+			res = MoveCeiling (m_Speed, m_TopDist, -1, 1, false);
+			res2 = MoveFloor (m_Speed, m_BotDist, -1, -1, false);
+		}
 		
 		// killough 10/98: implement gradual lighting effects
 		if (m_LightTag != 0 && m_TopDist != -m_Sector->floorplane.d)
@@ -190,7 +210,8 @@ void DDoor::Tick ()
 				m_TopDist + m_Sector->floorplane.d));
 		}
 
-		if (res == pastdest)
+		//if (res == pastdest)
+		if (res == pastdest && res2 == pastdest)
 		{
 			SN_StopSequence (m_Sector, CHAN_CEILING);
 			switch (m_Type)
@@ -348,9 +369,9 @@ DDoor::DDoor (sector_t *sector)
 //
 //============================================================================
 
-DDoor::DDoor (sector_t *sec, EVlDoor type, fixed_t speed, int delay, int lightTag)
-	: DMovingCeiling (sec),
-  	  m_Type (type), m_Speed (speed), m_TopWait (delay), m_LightTag (lightTag)
+DDoor::DDoor (sector_t *sec, EVlDoor type, fixed_t speed, int delay, int lightTag, bool splitdoor)//[GEC]
+	: DMovingCeiling (sec, splitdoor),//[GEC]
+  	  m_Type (type), m_Speed (speed), m_TopWait (delay), m_LightTag (lightTag), m_SplitDoor (splitdoor)//[GEC]
 {
 	vertex_t *spot;
 	fixed_t height;
@@ -404,6 +425,20 @@ DDoor::DDoor (sector_t *sec, EVlDoor type, fixed_t speed, int delay, int lightTa
 		m_BotDist = sec->ceilingplane.PointToDist (m_BotSpot, height);
 	}
 	m_OldFloorDist = sec->floorplane.d;
+
+	//[D64]
+	//[GEC] Veritcal Door
+	if(m_SplitDoor)
+	{
+		// find the top and bottom of the movement range
+		height = sec->FindLowestCeilingSurrounding (&spot);
+		m_TopDist = sec->ceilingplane.PointToDist (spot, height - 4*FRACUNIT);
+
+		m_OldFloorDist = sec->floorplane.ZatPoint (spot);
+
+		height = sec->FindLowestFloorSurrounding (&m_BotSpot);
+		m_BotDist = sec->floorplane.PointToDist (m_BotSpot, (height != m_OldFloorDist) ? (height + 4*FRACUNIT) : (height));
+	}
 }
 
 //============================================================================
@@ -418,7 +453,14 @@ bool EV_DoDoor (DDoor::EVlDoor type, line_t *line, AActor *thing,
 {
 	bool		rtn = false;
 	int 		secnum;
+	bool 		splitdoor = false;
 	sector_t*	sec;
+
+	if(speed < 0)//[GEC]
+	{
+		speed = - speed;
+		splitdoor = true;
+	}
 
 	if (lock != 0 && !P_CheckKeys (thing, lock, tag != 0))
 		return false;
@@ -433,6 +475,12 @@ bool EV_DoDoor (DDoor::EVlDoor type, line_t *line, AActor *thing,
 		{
 			S_Sound (thing, CHAN_VOICE, "*usefail", 1, ATTN_NORM);
 			return false;
+		}
+
+		//[GEC] Check Flag
+		if (line->gecflags & ML_VERTICALDOOR)
+		{
+			splitdoor = true;
 		}
 
 		// get the sector on the second side of activating linedef
@@ -480,7 +528,7 @@ bool EV_DoDoor (DDoor::EVlDoor type, line_t *line, AActor *thing,
 			}
 			return false;
 		}
-		if (new DDoor (sec, type, speed, delay, lightTag))
+		if (new DDoor (sec, type, speed, delay, lightTag, splitdoor))
 			rtn = true;
 	}
 	else
@@ -494,7 +542,7 @@ bool EV_DoDoor (DDoor::EVlDoor type, line_t *line, AActor *thing,
 			if (sec->PlaneMoving(sector_t::ceiling))
 				continue;
 
-			if (new DDoor (sec, type, speed, delay, lightTag))
+			if (new DDoor (sec, type, speed, delay, lightTag, splitdoor))
 				rtn = true;
 		}
 				
@@ -533,7 +581,7 @@ void P_SpawnDoorCloseIn30 (sector_t *sec)
 
 void P_SpawnDoorRaiseIn5Mins (sector_t *sec)
 {
-	new DDoor (sec, DDoor::doorRaiseIn5Mins, 2*FRACUNIT, TICRATE*30/7, 0);
+	new DDoor (sec, DDoor::doorRaiseIn5Mins, 2*FRACUNIT, TICRATE*30/7, 0, false);//[GEC] False Vertical Door
 }
 
 

@@ -73,6 +73,7 @@
 #define RIGHTMARGIN 8
 #define BOTTOMARGIN 12
 
+EXTERN_CVAR(Int, screenblocks)
 
 CUSTOM_CVAR(Int, con_buffersize, -1, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
 {
@@ -88,6 +89,13 @@ static bool TabbedLast;		// True if last key pressed was tab
 static bool TabbedList;		// True if tab list was shown
 CVAR(Bool, con_notablist, false, CVAR_ARCHIVE)
 
+int HideMapName = false;//[GEC]
+CVAR(Bool, con_midlikelog, false, CVAR_ARCHIVE)//[GEC]
+CUSTOM_CVAR (Int, con_messagetype, 0, CVAR_ARCHIVE)//[GEC]
+{
+	if (self < 0) self = 0;
+	if (self > 2) self = 2;
+}
 
 static FTextureID conback;
 static DWORD conshade;
@@ -511,14 +519,23 @@ void C_AddNotifyString (int printlevel, const char *source)
 
 	for (i = 0; lines[i].Width >= 0; i++)
 	{
-		if (addtype == NEWLINE)
+		if (con_messagetype == 0)//[GEC]
 		{
-			for (int j = 0; j < NUMNOTIFIES-1; ++j)
+			if (addtype == NEWLINE)
 			{
-				NotifyStrings[j] = NotifyStrings[j+1];
+				for (int j = 0; j < NUMNOTIFIES-1; ++j)
+				{
+					NotifyStrings[j] = NotifyStrings[j+1];
+				}
 			}
+
+			NotifyStrings[NUMNOTIFIES-1].Text = lines[i].Text;
 		}
-		NotifyStrings[NUMNOTIFIES-1].Text = lines[i].Text;
+		else
+		{
+			NotifyStrings[NUMNOTIFIES-1].Text = source;//[GEC] Solo muestra un mensage a la vez =)
+		}
+		
 		NotifyStrings[NUMNOTIFIES-1].TimeOut = gametic + (int)(con_notifytime * TICRATE);
 		NotifyStrings[NUMNOTIFIES-1].PrintLevel = printlevel;
 		addtype = NEWLINE;
@@ -700,13 +717,26 @@ void C_Ticker ()
 	}
 }
 
+#include "sbar.h"
+#include "sbarinfo.h"
+
+extern	int		ST_Y;
+
 static void C_DrawNotifyText ()
 {
 	bool center = (con_centernotify != 0.f);
 	int i, line, lineadv, color, j, skip;
 	bool canskip;
+
+	int x, y, mResW, mResH, mBaseResW, mBaseResH;//[GEC]
+	int screen_width = SCREENWIDTH;//[GEC]
+	int screen_height = SCREENHEIGHT;//[GEC]
+	HideMapName = false;//[GEC]
 	
 	if (gamestate == GS_FULLCONSOLE || gamestate == GS_DEMOSCREEN/* || menuactive != MENU_Off*/)
+		return;
+
+	if(gamestate == GS_INTERMISSION && level.ClearMessages)//[GEC]
 		return;
 
 	line = NotifyTop;
@@ -714,7 +744,8 @@ static void C_DrawNotifyText ()
 	canskip = true;
 
 	lineadv = SmallFont->GetHeight ();
-	if (con_scaletext == 1)
+
+	if (con_scaletext == 1 && con_messagetype == 0)
 	{
 		lineadv *= CleanYfac;
 	}
@@ -723,6 +754,7 @@ static void C_DrawNotifyText ()
 
 	for (i = 0; i < NUMNOTIFIES; i++)
 	{
+		HideMapName = false;//[GEC]
 		if (NotifyStrings[i].TimeOut == 0)
 			continue;
 
@@ -732,6 +764,7 @@ static void C_DrawNotifyText ()
 			if (!show_messages && NotifyStrings[i].PrintLevel != 128)
 				continue;
 
+			HideMapName = true;//[GEC]
 			fixed_t alpha;
 
 			if (j < NOTIFYFADETIME)
@@ -748,7 +781,92 @@ static void C_DrawNotifyText ()
 			else
 				color = PrintColors[NotifyStrings[i].PrintLevel];
 
-			if (con_scaletext == 1)
+			if (con_messagetype == 1)//[GEC]
+			{
+				alpha = OPAQUE;
+
+				x = 2;
+				y = 224;
+				mResW = mBaseResW = 256;
+				mResH = mBaseResH = 224;
+
+				if (screenblocks <= 10 || automapactive)
+				{
+					y = Scale (ST_Y, mResH, SCREENHEIGHT);
+				}
+
+				if (con_scaletext == 0)//"Off"
+				{
+					mResW = Scale (mResW, screen_width, mBaseResW);
+					mResH = Scale (mResH, screen_height, mBaseResH);
+
+					x = Scale (x, screen_width, mBaseResW);
+					y = Scale (y, screen_height, mBaseResH);
+				}
+				else if (con_scaletext == 2)//"Double"
+				{
+					mResW = Scale (mResW, screen_width/2, mBaseResW);
+					mResH = Scale (mResH, screen_height/2, mBaseResH);
+
+					x = Scale (x, screen_width/2, mBaseResW);
+					y = Scale (y, screen_height/2, mBaseResH);
+				}
+
+				if (screenblocks <= 10 || automapactive)
+				{
+					y -= SmallFont->GetHeight() - 1;
+				}
+				else
+				{
+					y -= SmallFont->GetHeight();
+				}
+
+				y += line;
+
+				if (!center)
+					screen->DrawText (SmallFont, color, (int)x, (int)y, NotifyStrings[i].Text,
+						 DTA_Alpha, alpha, DTA_ResWidthF, mResW, DTA_ResHeightF, mResH, TAG_DONE);
+				else
+					screen->DrawText (SmallFont, color, (int)(mResW - SmallFont->StringWidth (NotifyStrings[i].Text)) / 2, (int)y, NotifyStrings[i].Text,
+						 DTA_Alpha, alpha, DTA_ResWidthF, mResW, DTA_ResHeightF, mResH, TAG_DONE);
+			}
+			else if (con_messagetype == 2)//[GEC]
+			{
+				if(automapactive)
+					alpha = OPAQUE;
+
+				x = 20;
+				y = 20;
+				mResW = mBaseResW = 320;
+				mResH = mBaseResH = 240;
+
+				if (con_scaletext == 0)//"Off"
+				{
+					mResW = Scale (mResW, screen_width, mBaseResW);
+					mResH = Scale (mResH, screen_height, mBaseResH);
+
+					x = Scale (x, screen_width, mBaseResW);
+					y = Scale (y, screen_height, mBaseResH);
+				}
+				else if (con_scaletext == 2)//"Double"
+				{
+					mResW = Scale (mResW, screen_width/2, mBaseResW);
+					mResH = Scale (mResH, screen_height/2, mBaseResH);
+
+					x = Scale (x, screen_width/2, mBaseResW);
+					y = Scale (y, screen_height/2, mBaseResH);
+				}
+
+				y += line;
+
+				if (!center)
+					screen->DrawText (SmallFont, color, (int)x, (int)y, NotifyStrings[i].Text,
+						 DTA_Alpha, alpha, DTA_ResWidthF, mResW, DTA_ResHeightF, mResH, TAG_DONE);
+				else
+					screen->DrawText (SmallFont, color, (int)(mResW - SmallFont->StringWidth (NotifyStrings[i].Text)) / 2, (int)y, NotifyStrings[i].Text,
+						 DTA_Alpha, alpha, DTA_ResWidthF, mResW, DTA_ResHeightF, mResH, TAG_DONE);
+			}
+			else if (con_scaletext == 1)//"On"
 			{
 				if (!center)
 					screen->DrawText (SmallFont, color, 0, line, NotifyStrings[i].Text,
@@ -759,7 +877,7 @@ static void C_DrawNotifyText ()
 						line, NotifyStrings[i].Text, DTA_CleanNoMove, true,
 						DTA_Alpha, alpha, TAG_DONE);
 			}
-			else if (con_scaletext == 0)
+			else if (con_scaletext == 0)//"Off"
 			{
 				if (!center)
 					screen->DrawText (SmallFont, color, 0, line, NotifyStrings[i].Text,
@@ -770,7 +888,7 @@ static void C_DrawNotifyText ()
 						line, NotifyStrings[i].Text,
 						DTA_Alpha, alpha, TAG_DONE);
 			}
-			else
+			else//"Double"
 			{
 				if (!center)
 					screen->DrawText (SmallFont, color, 0, line, NotifyStrings[i].Text,
@@ -799,11 +917,13 @@ static void C_DrawNotifyText ()
 				skip++;
 			}
 			NotifyStrings[i].TimeOut = 0;
+			HideMapName = false;//[GEC]
 		}
 	}
 	if (canskip)
 	{
 		NotifyTop = NotifyTopGoal;
+		HideMapName = false;//[GEC]
 	}
 }
 
@@ -1543,6 +1663,32 @@ static const char bar3[] = TEXTCOLOR_RED "\n\35\36\36\36\36\36\36\36\36\36\36\36
 						  "\36\36\36\36\36\36\36\36\36\36\36\36\37" TEXTCOLOR_NORMAL "\n";
 static const char logbar[] = "\n<------------------------------->\n";
 
+char* colors[22] = //[GEC]
+{
+	"\034A", // TEXTCOLOR_BRICK
+	"\034B", // TEXTCOLOR_TAN
+	"\034C", // TEXTCOLOR_GRAY	TEXTCOLOR_GREY
+	"\034D", // TEXTCOLOR_GREEN
+	"\034E", // TEXTCOLOR_BROWN
+	"\034F", // TEXTCOLOR_GOLD
+	"\034G", // TEXTCOLOR_RED
+	"\034H", // TEXTCOLOR_BLUE
+	"\034I", // TEXTCOLOR_ORANGE
+	"\034J", // TEXTCOLOR_WHITE
+	"\034K", // TEXTCOLOR_YELLOW
+	"\034L", // TEXTCOLOR_UNTRANSLATED
+	"\034M", // TEXTCOLOR_BLACK
+	"\034N", // TEXTCOLOR_LIGHTBLUE
+	"\034O", // TEXTCOLOR_CREAM
+	"\034P", // TEXTCOLOR_OLIVE
+	"\034Q", // TEXTCOLOR_DARKGREEN
+	"\034R", // TEXTCOLOR_DARKRED
+	"\034S", // TEXTCOLOR_DARKBROWN
+	"\034T", // TEXTCOLOR_PURPLE
+	"\034U", // TEXTCOLOR_DARKGRAY
+	"\034V", // TEXTCOLOR_CYAN
+};
+
 void C_MidPrint (FFont *font, const char *msg)
 {
 	if (StatusBar == NULL || screen == NULL)
@@ -1554,8 +1700,57 @@ void C_MidPrint (FFont *font, const char *msg)
 		AddToConsole (-1, msg);
 		AddToConsole (-1, bar3);
 
-		StatusBar->AttachMessage (new DHUDMessage (font, msg, 1.5f, 0.375f, 0, 0,
-			(EColorRange)PrintColors[PRINTLEVELS], con_midtime), MAKE_ID('C','N','T','R'));
+		int mResW = 0, mBaseResW = 0;
+		int mResH = 0, mBaseResH = 0;
+		float x = 1.5f;
+		float y = 0.375f;
+		int screen_width = SCREENWIDTH;//[GEC]
+		int screen_height = SCREENHEIGHT;//[GEC]
+
+		if (con_messagetype == 1)//[GEC]
+		{
+			mResW = mBaseResW = 256;
+			mResH = mBaseResH = 224;
+
+			if (con_scaletext == 0)//"Off"
+			{
+				mResW = Scale (mResW, screen_width, mBaseResW);
+				mResH = Scale (mResH, screen_height, mBaseResH);
+			}
+			else if (con_scaletext == 2)//"Double"
+			{
+				mResW = Scale (mResW, screen_width/2, mBaseResW);
+				mResH = Scale (mResH, screen_height/2, mBaseResH);
+			}
+
+			x = (float)mResW/2;
+			y = (float)mResH/2;
+		}
+		else if (con_messagetype == 2)//[GEC]
+		{
+			mResW = mBaseResW = 320;
+			mResH = mBaseResH = 240;
+
+			if (con_scaletext == 0)//"Off"
+			{
+				mResW = Scale (mResW, screen_width, mBaseResW);
+				mResH = Scale (mResH, screen_height, mBaseResH);
+			}
+			else if (con_scaletext == 2)//"Double"
+			{
+				mResW = Scale (mResW, screen_width/2, mBaseResW);
+				mResH = Scale (mResH, screen_height/2, mBaseResH);
+			}
+
+			x = (float)mResW/2;
+			y = (float)mResH/2;
+		}
+
+		if(con_midlikelog)
+			Printf("%s%s\n",colors[(EColorRange)PrintColors[PRINTLEVELS]],msg);//[GEC]
+		else
+			StatusBar->AttachMessage (new DHUDMessage (font, msg, x, y, mResW, mResH,
+				(EColorRange)PrintColors[PRINTLEVELS], con_midtime), MAKE_ID('C','N','T','R'));
 	}
 	else
 	{
@@ -1571,8 +1766,57 @@ void C_MidPrintBold (FFont *font, const char *msg)
 		AddToConsole (-1, msg);
 		AddToConsole (-1, bar3);
 
-		StatusBar->AttachMessage (new DHUDMessage (font, msg, 1.5f, 0.375f, 0, 0,
-			(EColorRange)PrintColors[PRINTLEVELS+1], con_midtime), MAKE_ID('C','N','T','R'));
+		int mResW = 0, mBaseResW = 0;
+		int mResH = 0, mBaseResH = 0;
+		float x = 1.5f;
+		float y = 0.375f;
+		int screen_width = SCREENWIDTH;//[GEC]
+		int screen_height = SCREENHEIGHT;//[GEC]
+
+		if (con_messagetype == 1)//[GEC]
+		{
+			mResW = mBaseResW = 256;
+			mResH = mBaseResH = 224;
+
+			if (con_scaletext == 0)//"Off"
+			{
+				mResW = Scale (mResW, screen_width, mBaseResW);
+				mResH = Scale (mResH, screen_height, mBaseResH);
+			}
+			else if (con_scaletext == 2)//"Double"
+			{
+				mResW = Scale (mResW, screen_width/2, mBaseResW);
+				mResH = Scale (mResH, screen_height/2, mBaseResH);
+			}
+
+			x = (float)mResW/2;
+			y = (float)mResH/2;
+		}
+		else if (con_messagetype == 2)//[GEC]
+		{
+			mResW = mBaseResW = 320;
+			mResH = mBaseResH = 240;
+
+			if (con_scaletext == 0)//"Off"
+			{
+				mResW = Scale (mResW, screen_width, mBaseResW);
+				mResH = Scale (mResH, screen_height, mBaseResH);
+			}
+			else if (con_scaletext == 2)//"Double"
+			{
+				mResW = Scale (mResW, screen_width/2, mBaseResW);
+				mResH = Scale (mResH, screen_height/2, mBaseResH);
+			}
+
+			x = (float)mResW/2;
+			y = (float)mResH/2;
+		}
+
+		if(con_midlikelog)
+			Printf(PRINT_BOLD,"%s%s\n",colors[(EColorRange)PrintColors[PRINTLEVELS+1]],msg);//[GEC]
+		else
+			StatusBar->AttachMessage (new DHUDMessage (font, msg, x, y, mResW, mResH,
+				(EColorRange)PrintColors[PRINTLEVELS+1], con_midtime), MAKE_ID('C','N','T','R'));
 	}
 	else
 	{

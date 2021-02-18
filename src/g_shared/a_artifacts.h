@@ -109,6 +109,14 @@ protected:
 	void EndEffect ();
 };
 
+//[GEC]
+class APowerD64LightAmp : public APowerup
+{
+	DECLARE_CLASS (APowerD64LightAmp, APowerup)
+protected:
+	void DoEffect ();
+};
+
 class APowerTorch : public APowerLightAmp
 {
 	DECLARE_CLASS (APowerTorch, APowerLightAmp)

@@ -47,6 +47,8 @@
 #include "gl/textures/gl_material.h"
 #include "gl/shaders/gl_shader.h"
 
+#include "gl/textures/gl_combiners.h"//[GEC]
+
 #define MAX_QPATH 64
 
 static void UnpackVector(unsigned short packed, float & nx, float & ny, float & nz)
@@ -259,6 +261,7 @@ void FMD3Model::RenderFrame(FTexture * skin, int frameno, int cm, int translatio
 		FMaterial * tex = FMaterial::ValidateTexture(surfaceSkin);
 
 		tex->Bind(cm, 0, translation);
+		SetNewSpecials(tex, cm, false, false);//[GEC]
 		RenderTriangles(surf, surf->vertices + frameno * surf->numVertices);
 	}
 }
@@ -284,6 +287,7 @@ void FMD3Model::RenderFrameInterpolated(FTexture * skin, int frameno, int framen
 		FMaterial * tex = FMaterial::ValidateTexture(surfaceSkin);
 
 		tex->Bind(cm, 0, translation);
+		SetNewSpecials(tex, cm, false, false);//[GEC]
 
 		MD3Vertex* verticesInterpolated = new MD3Vertex[surfaces[i].numVertices];
 		MD3Vertex* vertices1 = surf->vertices + frameno * surf->numVertices;

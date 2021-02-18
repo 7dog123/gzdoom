@@ -34,6 +34,7 @@
 #include "v_text.h"
 #include "gstrings.h"
 
+extern int MenuAlpha; //[GEC]
 
 void M_DrawConText (int color, int x, int y, const char *str);
 void M_SetVideoMode();
@@ -202,7 +203,7 @@ public:
 		}
 		if (*text == '$') text = GStrings(text + 1);
 		screen->DrawText (SmallFont, OptionSettings.mFontColorValue, indent + CURSORSPACE, y, 
-			text, DTA_CleanNoMove_1, true, DTA_ColorOverlay, overlay, TAG_DONE);
+			text, DTA_CleanNoMove_1, true, DTA_ColorOverlay, overlay, DTA_Alpha, MenuAlpha, TAG_DONE);//[GEC]
 		return indent;
 	}
 
@@ -359,7 +360,7 @@ public:
 			*pKey = ev->data1;
 			menuactive = MENU_On;
 			SetMenuMessage(0);
-			Close();
+			Close(true);//[GEC]
 			mParentMenu->MenuEvent((ev->data1 == KEY_ESCAPE)? MKEY_Abort : MKEY_Input, 0);
 			return true;
 		}
@@ -415,7 +416,7 @@ public:
 		else
 		{
 			screen->DrawText(SmallFont, CR_BLACK, indent + CURSORSPACE, y + (OptionSettings.mLinespacing-8)*CleanYfac_1, "---",
-				DTA_CleanNoMove_1, true, TAG_DONE);
+				DTA_CleanNoMove_1, true, DTA_Alpha, MenuAlpha, TAG_DONE);//[GEC]
 		}
 		return indent;
 	}
@@ -447,7 +448,7 @@ public:
 		S_Sound (CHAN_VOICE | CHAN_UI, "menu/choose", snd_menuvolume, ATTN_NONE);
 		mWaiting = true;
 		DMenu *input = new DEnterKey(DMenu::CurrentMenu, &mInput);
-		M_ActivateMenu(input);
+		M_ActivateMenu(input, true);//[GEC]
 		return true;
 	}
 };
@@ -508,7 +509,7 @@ public:
 		if (*txt == '$') txt = GStrings(txt + 1);
 		int w = SmallFont->StringWidth(txt) * CleanXfac_1;
 		int x = (screen->GetWidth() - w) / 2;
-		screen->DrawText (SmallFont, mColor, x, y, txt, DTA_CleanNoMove_1, true, TAG_DONE);
+		screen->DrawText (SmallFont, mColor, x, y, txt, DTA_CleanNoMove_1, true, DTA_Alpha, MenuAlpha, TAG_DONE);//[GEC]
 		return -1;
 	}
 
@@ -608,7 +609,7 @@ public:
 		if (fracdigits >= 0 && right + maxlen <= screen->GetWidth())
 		{
 			mysnprintf(textbuf, countof(textbuf), "%.*f", fracdigits, cur);
-			screen->DrawText(SmallFont, CR_DARKGRAY, right, y, textbuf, DTA_CleanNoMove_1, true, TAG_DONE);
+			screen->DrawText(SmallFont, CR_DARKGRAY, right, y, textbuf, DTA_CleanNoMove_1, true, DTA_Alpha, MenuAlpha, TAG_DONE);//[GEC]
 		}
 	}
 
@@ -936,7 +937,7 @@ public:
 			else
 				color = OptionSettings.mFontColorValue;
 
-			screen->DrawText (SmallFont, color, colwidth * x + 20 * CleanXfac_1, y, mResTexts[x], DTA_CleanNoMove_1, true, TAG_DONE);
+			screen->DrawText (SmallFont, color, colwidth * x + 20 * CleanXfac_1, y, mResTexts[x], DTA_CleanNoMove_1, true, DTA_Alpha, MenuAlpha, TAG_DONE);//[GEC]
 		}
 		return colwidth * mSelection + 20 * CleanXfac_1 - CURSORSPACE;
 	}
@@ -992,7 +993,7 @@ public:
 		int overlay = grayed? MAKEARGB( 96, 48, 0, 0 ) : 0;
 
 		screen->DrawText( SmallFont, OptionSettings.mFontColorValue, indent + CURSORSPACE, y,
-			Represent().GetChars(), DTA_CleanNoMove_1, true, DTA_ColorOverlay, overlay, TAG_DONE );
+			Represent().GetChars(), DTA_CleanNoMove_1, true, DTA_ColorOverlay, overlay, DTA_Alpha, MenuAlpha, TAG_DONE);//[GEC]
 		return indent;
 	}
 
@@ -1077,7 +1078,7 @@ public:
 			strcpy( mEditName, GetCVarString() );
 			mEntering = true;
 			DMenu* input = new DTextEnterMenu ( DMenu::CurrentMenu, mEditName, sizeof mEditName, 2, fromcontroller );
-			M_ActivateMenu( input );
+			M_ActivateMenu( input, true);//[GEC]
 			return true;
 		}
 		else if ( mkey == MKEY_Input )

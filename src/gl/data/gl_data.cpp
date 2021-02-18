@@ -215,6 +215,8 @@ struct FGLROptions : public FOptionalMapinfoData
 		skyrotatevector = FVector3(0,0,1);
 		skyrotatevector2 = FVector3(0,0,1);
 		pixelstretch = 1.2f;
+		mapheight = 0;//[GEC]
+		clearbuffer = false;//[GEC]
 	}
 	virtual FOptionalMapinfoData *Clone() const
 	{
@@ -229,6 +231,8 @@ struct FGLROptions : public FOptionalMapinfoData
 		newopt->skyrotatevector = skyrotatevector;
 		newopt->skyrotatevector2 = skyrotatevector2;
 		newopt->pixelstretch = pixelstretch;
+		newopt->mapheight = mapheight;//[GEC]
+		newopt->clearbuffer = clearbuffer;//[GEC]
 		return newopt;
 	}
 	int			fogdensity;
@@ -241,6 +245,8 @@ struct FGLROptions : public FOptionalMapinfoData
 	FVector3	skyrotatevector;
 	FVector3	skyrotatevector2;
 	float		pixelstretch;
+	int			mapheight;//[GEC]
+	bool		clearbuffer;//[GEC]
 };
 
 DEFINE_MAP_OPTION(fogdensity, false)
@@ -352,9 +358,28 @@ DEFINE_MAP_OPTION(pixelratio, false)
 	opt->pixelstretch = (float)parse.sc.Float;
 }
 
+DEFINE_MAP_OPTION(mapheight, false)//[GEC]
+{
+	FGLROptions *opt = info->GetOptData<FGLROptions>("gl_renderer");
+
+	parse.ParseAssign();
+	parse.sc.MustGetNumber();
+	opt->mapheight = (int)parse.sc.Number;
+}
+
+DEFINE_MAP_OPTION(clearbuffer, false)//[GEC]
+{
+	FGLROptions *opt = info->GetOptData<FGLROptions>("gl_renderer");
+
+	parse.ParseAssign();
+	parse.sc.MustGetNumber();
+
+	opt->clearbuffer = !!parse.sc.Number;
+}
+
 bool IsLightmodeValid()
 {
-	return (glset.map_lightmode >= 0 && glset.map_lightmode <= 4) || glset.map_lightmode == 8;
+	return (glset.map_lightmode >= 0 && glset.map_lightmode <= 4) || glset.map_lightmode == 8 || glset.map_lightmode == 16;//[GEC]
 }
 
 void InitGLRMapinfoData()
@@ -371,6 +396,8 @@ void InitGLRMapinfoData()
 		glset.skyrotatevector = opt->skyrotatevector;
 		glset.skyrotatevector2 = opt->skyrotatevector2;
 		glset.pixelstretch = opt->pixelstretch;
+		glset.mapheight = opt->mapheight;//[GEC]
+		glset.clearbuffer = opt->clearbuffer;//[GEC]
 		if (gl.shadermodel == 2 && glset.map_lightmode ==2) glset.map_lightmode = 3;
 	}
 	else
@@ -383,6 +410,8 @@ void InitGLRMapinfoData()
 		glset.skyrotatevector = FVector3(0,0,1);
 		glset.skyrotatevector2 = FVector3(0,0,1);
 		glset.pixelstretch = 1.2f;
+		glset.mapheight = 0;//[GEC]
+		glset.clearbuffer = false;//[GEC]
 	}
 
 	if (!IsLightmodeValid()) glset.lightmode = gl_lightmode;

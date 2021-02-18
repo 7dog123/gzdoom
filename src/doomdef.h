@@ -26,9 +26,16 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <stdlib.h>
+#include <math.h>
+#include "basictypes.h"
+#include "c_cvars.h"
+
 //
 // Global parameters/defines.
 //
+
+//EXTERN_CVAR (Int, ticratemode) //[GEC]
 
 // Game mode handling - identify IWAD version
 //	to handle IWAD dependend animations etc.
@@ -55,8 +62,11 @@ typedef enum
 // The maximum number of players, multiplayer/networking.
 #define MAXPLAYERS		8
 
+// [GEC] 
+extern int GetTicrate(void);
+
 // State updates, number of tics / second.
-#define TICRATE 		35
+#define TICRATE 		GetTicrate()	//35
 
 // Amount of damage done by a telefrag.
 #define TELEFRAG_DAMAGE	1000000
@@ -75,11 +85,22 @@ typedef enum
 	GS_STARTUP,			// [RH] Console is fullscreen, and game is just starting
 	GS_TITLELEVEL,		// [RH] A combination of GS_LEVEL and GS_DEMOSCREEN
 
-	GS_FORCEWIPE = -1,
+	/*GS_FORCEWIPE = -1,
 	GS_FORCEWIPEFADE = -2,
 	GS_FORCEWIPEBURN = -3,
-	GS_FORCEWIPEMELT = -4
+	GS_FORCEWIPEMELT = -4*/
+	GS_FORCEWIPE = -1,
+	GS_FORCEWIPENONE = -2, // [GEC]
+	GS_FORCEWIPEFADE = -3,
+	GS_FORCEWIPEBURN = -4,
+	GS_FORCEWIPEMELT = -5,
+	GS_FORCEWIPEMELT64 = -6,
+	GS_FORCEWIPEFADESCREEN = -7,
+	GS_FORCEWIPELOADINGSCREEN = -8
 } gamestate_t;
+
+//[GEC]
+extern	bool WipeDone;
 
 extern	gamestate_t 	gamestate;
 
@@ -364,12 +385,19 @@ enum
 // linedefs. More friction can create mud, sludge,
 // magnetized floors, etc. Less friction can create ice.
 
-#define MORE_FRICTION_VELOCITY	15000	// mud factor based on velocity
+/*#define MORE_FRICTION_VELOCITY	15000	// mud factor based on velocity
 #define ORIG_FRICTION			0xE800	// original value
 #define ORIG_FRICTION_FACTOR	2048	// original value
 #define FRICTION_LOW			0xf900
-#define FRICTION_FLY			0xeb00
+#define FRICTION_FLY			0xeb00*/
 
+extern fixed_t FRICTION_BASE[3];//[GEC]
+
+#define MORE_FRICTION_VELOCITY	15000			// mud factor based on velocity
+#define ORIG_FRICTION			(FRICTION_BASE[0])	//0xE800	// original value
+#define ORIG_FRICTION_FACTOR	2048			// original value
+#define FRICTION_LOW			(FRICTION_BASE[1])	//0xf900
+#define FRICTION_FLY			(FRICTION_BASE[2])	//0xeb00
 
 #define BLINKTHRESHOLD (4*32)
 

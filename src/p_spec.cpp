@@ -225,9 +225,22 @@ bool P_ActivateLine (line_t *line, AActor *mo, int side, int activationType)
 
 	if (buttonSuccess)
 	{
-		if (activationType == SPAC_Use || activationType == SPAC_Impact || activationType == SPAC_Push)
+		if((line->gecflags & ML_SWITCHX02 ||
+		line->gecflags & ML_SWITCHX04 ||
+		line->gecflags & ML_SWITCHX08)) //[GEC] D64 Style
 		{
-			P_ChangeSwitchTexture (line->sidedef[0], repeat, special);
+			if (activationType & SPAC_Use || activationType & SPAC_Impact || activationType & SPAC_Push || activationType & SPAC_UseBack)
+			{
+				//[GEC] nativo "doom pc y derivados de consolas" las activaciones con D1|DR no ejecuta la animacion de la textura
+				if(!(line->gecflags & ML_NOSWITCHANIMATE))
+					P_ChangeSwitchTexture (line->sidedef[0], repeat, special);
+			}
+		}
+		else if (activationType == SPAC_Use || activationType == SPAC_Impact || activationType == SPAC_Push)
+		{
+			//[GEC] nativo "doom pc y derivados de consolas" las activaciones con D1|DR no ejecuta la animacion de la textura
+			if(!(line->gecflags & ML_NOSWITCHANIMATE))
+				P_ChangeSwitchTexture (line->sidedef[0], repeat, special);
 		}
 	}
 	// some old WADs use this method to create walls that change the texture when shot.
@@ -284,6 +297,21 @@ bool P_TestActivateLine (line_t *line, AActor *mo, int side, int activationType)
 	{
 		lineActivation |= SPAC_Cross|SPAC_MCross;
 	}
+
+	//[GEC] 
+	if((line->gecflags & ML_SWITCHX02 ||
+		line->gecflags & ML_SWITCHX04 ||
+		line->gecflags & ML_SWITCHX08))
+	{
+		if (activationType & SPAC_Use || activationType & SPAC_UseBack)
+		{
+			if (!P_CheckUseHeight(line, mo, side))
+			{
+				return false;
+			}
+		}
+	}
+
 	if (activationType == SPAC_Use || activationType == SPAC_UseBack)
 	{
 		if (!P_CheckSwitchRange(mo, line, side))
@@ -430,6 +458,7 @@ bool P_PredictLine(line_t *line, AActor *mo, int side, int activationType)
 //
 void P_PlayerInSpecialSector (player_t *player, sector_t * sector)
 {
+	player->secdamage = false;//[GEC] reser default
 	if (sector == NULL)
 	{
 		// Falling, not all the way down yet?
@@ -454,6 +483,11 @@ void P_PlayerInSpecialSector (player_t *player, sector_t * sector)
 		{
 			if (ironfeet->IsKindOf (RUNTIME_CLASS(APowerIronFeet)))
 				break;
+		}
+
+		if ((ironfeet == NULL))//[GEC]
+		{
+			player->secdamage = true;
 		}
 
 		if (sector->Flags & SECF_ENDGODMODE) player->cheats &= ~CF_GODMODE;
@@ -1125,6 +1159,11 @@ static void P_SetupSectorDamage(sector_t *sector, int damage, int interval, int 
 // ('fromload' is necessary to allow conversion upon savegame load.)
 //
 
+sector_t *T_LightFlash;
+sector_t *T_StrobeFlash;
+sector_t *T_Glow;
+sector_t *T_FireFlicker;
+
 void P_InitSectorSpecial(sector_t *sector, int special, bool nothinkers)
 {
 	// [RH] All secret sectors are marked with a BOOM-ish bitfield
@@ -1228,7 +1267,7 @@ void P_InitSectorSpecial(sector_t *sector, int special, bool nothinkers)
 		break;
 
 	case dLight_FireFlicker:
-		if (!nothinkers) new DFireFlicker (sector);
+		if (!nothinkers) new DFireFlicker (sector, false);
 		break;
 
 	case dDamage_LavaWimpy:
@@ -1285,6 +1324,190 @@ void P_InitSectorSpecial(sector_t *sector, int special, bool nothinkers)
 		sector->sky = PL_SKYFLAT;
 		break;
 
+
+	// [GEC] Nuevas Luces
+
+		//PSX DOOM
+	case dLight_PsxFireFlicker:
+		if (!nothinkers) new DFireFlicker (sector, true);
+		break;
+
+	case dLight_PsxGlowLower:
+		if (!nothinkers) new DPsxGlow (sector, 0);
+		break;
+
+	case dLight_PsxGlowLower_10:
+		if (!nothinkers) new DPsxGlow (sector, 1);
+		break;
+
+	case dLight_PsxGlowUpper_255:
+		if (!nothinkers) new DPsxGlow (sector, 2);
+		break;
+
+	case dLight_PsxStrobeTurbo:
+		if (!nothinkers) new DStrobe (sector, sector->lightlevel, 10, 1*2, 1*2);//original psxdoom (upper -> 1, lower -> 1)
+		break;
+
+	case dLight_PsxStrobeFast:
+		if (!nothinkers) new DStrobe (sector, 3*2, 4*2, false);//original psxdoom (upper -> 3, lower -> 4)
+		break;
+
+		//DOOM 64
+	case dLight_64Flicker:
+		if((sector->Flags & SECF_SYNCSPECIALS))
+		{
+			if (!nothinkers) new DCombine64 (sector, T_LightFlash);
+		}
+		else
+		{
+			if(T_LightFlash == NULL) T_LightFlash = sector;
+			if (!nothinkers) new DLightFlash64 (sector);
+		}
+		keepspecial = true;
+		break;
+
+	case dLight_64StrobeFast:
+		if((sector->Flags & SECF_SYNCSPECIALS))
+		{
+			if (!nothinkers) new DCombine64 (sector, T_StrobeFlash);
+		}
+		else
+		{
+			if(T_StrobeFlash == NULL) T_StrobeFlash = sector;
+			if (!nothinkers) new DStrobe64 (sector, D64FASTDARK, false);
+		}
+		keepspecial = true;
+		break;
+
+	case dLight_64StrobeSlow:
+		if((sector->Flags & SECF_SYNCSPECIALS))
+		{
+			if (!nothinkers) new DCombine64 (sector, T_StrobeFlash);
+		}
+		else
+		{
+			if(T_StrobeFlash == NULL) T_StrobeFlash = sector;
+			if (!nothinkers) new DStrobe64 (sector, D64SLOWDARK, false);
+		}
+		keepspecial = true;
+		break;
+
+	case dLight_64GlowNormal:
+		if((sector->Flags & SECF_SYNCSPECIALS))
+		{
+			if (!nothinkers) new DCombine64 (sector, T_Glow);
+		}
+		else
+		{
+			if(T_Glow == NULL) T_Glow = sector;
+			if (!nothinkers) new DGlow64 (sector, D64PULSENORMAL);
+		}
+		keepspecial = true;
+		break;
+	case dLight_64GlowSlow:
+		if((sector->Flags & SECF_SYNCSPECIALS))
+		{
+			if (!nothinkers) new DCombine64 (sector, T_Glow);
+		}
+		else
+		{
+			if(T_Glow == NULL) T_Glow = sector;
+			if (!nothinkers) new DGlow64 (sector, D64PULSESLOW);
+		}
+		keepspecial = true;
+		break;
+
+	case dLight_64GlowRandom:
+		if((sector->Flags & SECF_SYNCSPECIALS))
+		{
+			if (!nothinkers) new DCombine64 (sector, T_Glow);
+		}
+		else
+		{
+			if(T_Glow == NULL) T_Glow = sector;
+			if (!nothinkers) new DGlow64 (sector, D64PULSERANDOM);
+		}
+		keepspecial = true;
+		break;
+
+	case dLight_64FireFlicker:
+		if((sector->Flags & SECF_SYNCSPECIALS))
+		{
+			if (!nothinkers) new DCombine64 (sector, T_FireFlicker);
+		}
+		else
+		{
+			if(T_FireFlicker == NULL) T_FireFlicker = sector;
+			if (!nothinkers) new DFireFlicker64 (sector);
+		}
+		keepspecial = true;
+		break;
+
+	case dLight_64StrobeAltFlash_A:
+		if((sector->Flags & SECF_SYNCSPECIALS))
+		{
+			if (!nothinkers) new DCombine64 (sector, T_StrobeFlash);
+		}
+		else
+		{
+			if(T_StrobeFlash == NULL) T_StrobeFlash = sector;
+			if (!nothinkers) new DStrobe64 (sector, 3, true);
+		}
+		keepspecial = true;
+		break;
+
+	case dLight_64StrobeFlash_A:
+		if((sector->Flags & SECF_SYNCSPECIALS))
+		{
+			if (!nothinkers) new DCombine64 (sector, T_StrobeFlash);
+		}
+		else
+		{
+			if(T_StrobeFlash == NULL) T_StrobeFlash = sector;
+			if (!nothinkers) new DStrobe64 (sector, 7, false);
+		}
+		keepspecial = true;
+		break;
+
+	case dLight_64SequenceLight:
+		if((sector->Flags & SECF_SYNCSPECIALS))
+		{
+			if (!nothinkers) new DCombine64 (sector, T_StrobeFlash);
+		}
+		else
+		{
+			if(T_StrobeFlash == NULL) T_StrobeFlash = sector;
+			if (!nothinkers) new DSequenceGlow64 (sector, true);
+		}
+		keepspecial = true;
+		break;
+
+	case dLight_64StrobeFlash_B:
+		if((sector->Flags & SECF_SYNCSPECIALS))
+		{
+			if (!nothinkers) new DCombine64 (sector, T_StrobeFlash);
+		}
+		else
+		{
+			if(T_StrobeFlash == NULL) T_StrobeFlash = sector;
+			if (!nothinkers) new DStrobe64 (sector, 90, false);
+		}
+		keepspecial = true;
+		break;
+
+	case dLight_64StrobeAltFlash_B:
+		if((sector->Flags & SECF_SYNCSPECIALS))
+		{
+			if (!nothinkers) new DCombine64 (sector, T_StrobeFlash);
+		}
+		else
+		{
+			if(T_StrobeFlash == NULL) T_StrobeFlash = sector;
+			if (!nothinkers) new DStrobe64 (sector, 6, true);
+		}
+		keepspecial = true;
+		break;
+
 	default:
 		if (sector->special >= Scroll_North_Slow &&
 			sector->special <= Scroll_SouthWest_Fast)
@@ -1336,6 +1559,16 @@ void P_SpawnSpecials (void)
 
 	//	Init special SECTORs.
 	sector = sectors;
+
+	// [GEC]
+	scrollfrac = 0;
+	lightfactor = 0;
+	infraredFactor = 0;
+	//[GEC]	Init HeadSectors.
+	T_LightFlash = NULL;
+	T_StrobeFlash = NULL;
+	T_Glow = NULL;
+	T_FireFlicker = NULL;
 
 	for (i = 0; i < numsectors; i++, sector++)
 	{
@@ -1982,7 +2215,62 @@ static void P_SpawnScrollers(void)
 		default:
 			// [RH] It wasn't a scroller after all, so restore the special.
 			l->special = special;
+
+			//[GEC] Line Scroll Con Flags
+			if(l->gecflags & (ML_SCROLL_WALL_RIGHT|ML_SCROLL_WALL_LEFT|ML_SCROLL_WALL_UP|ML_SCROLL_WALL_DOWN))
+			{
+				int spd_lft = (l->gecflags & ML_SCROLL_WALL_LEFT) ? 1 : 0;
+				int spd_rgt = (l->gecflags & ML_SCROLL_WALL_RIGHT) ? 1 : 0;
+				int spd_up  = (l->gecflags & ML_SCROLL_WALL_UP) ? 1 : 0;
+				int spd_dwn = (l->gecflags & ML_SCROLL_WALL_DOWN) ? 1 : 0;
+
+				s = int(lines[i].sidedef[0] - sides);
+
+				dx = (spd_rgt - spd_lft) * (FRACUNIT);
+				dy = (spd_up - spd_dwn) * (FRACUNIT);
+				new DScroller (DScroller::sc_side, dx, dy, -1, s, accel);
+			}
 			break;
+		}
+	}
+
+	//[GEC] Sector Scroll Con Flags
+	sector_t *sector = sectors;
+	for (i = 0; i < numsectors; i++, sector++)
+	{
+		int spd_lft = (sector->Flags & SECF_SCROLLLEFT) ? 1 : 0;
+		int spd_rgt = (sector->Flags & SECF_SCROLLRIGHT) ? 1 : 0;
+		int spd_up  = (sector->Flags & SECF_SCROLLUP) ? 1 : 0;
+		int spd_dwn = (sector->Flags & SECF_SCROLLDOWN) ? 1 : 0;
+
+		fixed_t speed, cspeed;
+
+		if(sector->Flags & SECF_SCROLLFAST)
+		{
+			speed = 3*FRACUNIT;
+			cspeed = 3*0xC000;
+		}
+		else
+		{
+			speed = FRACUNIT;
+			cspeed = 0xC000;
+		}
+
+		fixed_t dx = (spd_lft - spd_rgt) * (speed);
+		fixed_t dy = (spd_up - spd_dwn) * (speed);
+
+		fixed_t cdx = (spd_lft - spd_rgt) * (cspeed);
+		fixed_t cdy = (spd_up - spd_dwn) * (cspeed);
+
+		if(sector->Flags & SECF_SCROLLCEILING)
+		{
+			new DScroller (DScroller::sc_ceiling,dx,dy, -1, int(sector-sectors), 0);
+		}
+
+		if(sector->Flags & SECF_SCROLLFLOOR)
+		{
+			new DScroller (DScroller::sc_floor,dx,dy, -1, int(sector-sectors), 0);
+			new DScroller (DScroller::sc_carry,-cdx,cdy, -1, int(sector-sectors), 0);
 		}
 	}
 }

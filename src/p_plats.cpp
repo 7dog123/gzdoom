@@ -123,6 +123,7 @@ void DPlat::Tick ()
 						m_Sector->planes[sector_t::floor].Flags |= PLANEF_BLOCKED; 
 					case platRaiseAndStay:
 					case platDownByValue:
+					case platDownByValue2://[GEC]
 					case platDownWaitUpStay:
 					case platDownWaitUpStayStone:
 					case platUpByValueStay:
@@ -159,6 +160,7 @@ void DPlat::Tick ()
 					case platUpWaitDownStay:
 					case platUpNearestWaitDownStay:
 					case platUpByValue:
+					case platUpByValue2://[GEC]
 						Destroy ();
 						break;
 					default:
@@ -299,19 +301,23 @@ bool EV_DoPlat (int tag, line_t *line, DPlat::EPlatType type, int height,
 
 		case DPlat::platUpByValue:
 		case DPlat::platUpByValueStay:
+		case DPlat::platUpByValue2://[GEC]
 			newheight = sec->floorplane.ZatPoint (0, 0) + height;
 			plat->m_High = sec->floorplane.PointToDist (0, 0, newheight);
 			plat->m_Low = sec->floorplane.d;
 			plat->m_Status = DPlat::up;
-			plat->PlayPlatSound ("Floor");
+			//plat->PlayPlatSound ("Floor");
+			plat->PlayPlatSound (type == DPlat::platUpByValue2 ? "Platform" : "Floor");//[GEC]
 			break;
 		
 		case DPlat::platDownByValue:
+		case DPlat::platDownByValue2://[GEC]
 			newheight = sec->floorplane.ZatPoint (0, 0) - height;
 			plat->m_Low = sec->floorplane.PointToDist (0, 0, newheight);
 			plat->m_High = sec->floorplane.d;
 			plat->m_Status = DPlat::down;
-			plat->PlayPlatSound ("Floor");
+			//plat->PlayPlatSound ("Floor");
+			plat->PlayPlatSound (type == DPlat::platDownByValue2 ? "Platform" : "Floor");//[GEC]
 			break;
 
 		case DPlat::platDownWaitUpStay:

@@ -219,6 +219,13 @@ void GLWall::SkyNormal(sector_t * fs,vertex_t * v1,vertex_t * v2)
 	ztop[0]=ztop[1]=32768.0f;
 	zbottom[0]=zceil[0];
 	zbottom[1]=zceil[1];
+
+	if(fs->Flags & SECF_SKY_HACK_CONSOLE)//[GEC]
+	{
+		ztop[0]=zbottom[0];
+		ztop[1]=zbottom[1];
+	}
+
 	SkyPlane(fs, sector_t::ceiling, true);
 
 	if (seg->linedef->skybox != NULL)
@@ -233,6 +240,13 @@ void GLWall::SkyNormal(sector_t * fs,vertex_t * v1,vertex_t * v2)
 	ztop[0]=zfloor[0];
 	ztop[1]=zfloor[1];
 	zbottom[0]=zbottom[1]=-32768.0f;
+
+	if(fs->Flags & SECF_SKY_HACK_CONSOLE)//[GEC]
+	{
+		zbottom[0]=ztop[0];
+		zbottom[1]=ztop[1];
+	}
+
 	SkyPlane(fs, sector_t::floor, true);
 }
 
@@ -287,11 +301,24 @@ void GLWall::SkyTop(seg_t * seg,sector_t * fs,sector_t * bs,vertex_t * v1,vertex
 		{
 			zbottom[0]=zceil[0];
 			zbottom[1]=zceil[1];
+
+			if((fs->GetTexture(sector_t::ceiling) == skyflatnum) && (fs->Flags & SECF_SKY_HACK_CONSOLE))//[GEC]
+			{
+				ztop[0]=zbottom[0];
+				ztop[1]=zbottom[1];
+			}
 		}
 		else
 		{
 			zbottom[0]=FIXED2FLOAT(bs->ceilingplane.ZatPoint(v1));
 			zbottom[1]=FIXED2FLOAT(bs->ceilingplane.ZatPoint(v2));
+
+			if((bs->GetTexture(sector_t::ceiling) == skyflatnum) && (bs->Flags & SECF_SKY_HACK_CONSOLE))//[GEC]
+			{
+				ztop[0]=zbottom[0];
+				ztop[1]=zbottom[1];
+			}
+
 			flags|=GLWF_SKYHACK;	// mid textures on such lines need special treatment!
 		}
 	}
@@ -363,11 +390,24 @@ void GLWall::SkyBottom(seg_t * seg,sector_t * fs,sector_t * bs,vertex_t * v1,ver
 		{
 			ztop[0]=zfloor[0];
 			ztop[1]=zfloor[1];
+
+			if((fs->GetTexture(sector_t::ceiling) == skyflatnum) && (fs->Flags & SECF_SKY_HACK_CONSOLE))//[GEC]
+			{
+				zbottom[0]=ztop[0];
+				zbottom[1]=ztop[1];
+			}
 		}
 		else
 		{
 			ztop[0]=FIXED2FLOAT(bs->floorplane.ZatPoint(v1));
 			ztop[1]=FIXED2FLOAT(bs->floorplane.ZatPoint(v2));
+
+			if((bs->GetTexture(sector_t::ceiling) == skyflatnum) && (bs->Flags & SECF_SKY_HACK_CONSOLE))//[GEC]
+			{
+				zbottom[0]=ztop[0];
+				zbottom[1]=ztop[1];
+			}
+
 			flags|=GLWF_SKYHACK;	// mid textures on such lines need special treatment!
 		}
 	}

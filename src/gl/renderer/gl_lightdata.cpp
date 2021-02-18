@@ -134,12 +134,11 @@ CUSTOM_CVAR(Int, gl_lightmode, 3 ,CVAR_ARCHIVE|CVAR_NOINITCALL)
 	if (newself > 4) newself=8;	// use 8 for software lighting to avoid conflicts with the bit mask
 	if (newself < 0) newself=0;
 	if ((newself == 2 || newself == 8) && gl.shadermodel < 4) newself = 3;
+	//
+	if (self == 16) newself = self;//[GEC] Software Doom psx
 	if (self != newself) self = newself;
 	glset.lightmode = newself;
 }
-
-
-
 
 //==========================================================================
 //
@@ -204,6 +203,7 @@ void gl_SetFogParams(int _fogdensity, PalEntry _outsidefogcolor, int _outsidefog
 	fogdensity>>=1;
 }
 
+extern float Factor;//[GEC]
 
 //==========================================================================
 //
@@ -226,12 +226,18 @@ int gl_CalcLightLevel(int lightlevel, int rellight, bool weapon)
 		light=lightlevel;
 	}
 
-	if (light<gl_light_ambient && glset.lightmode != 8)		// ambient clipping only if not using software lighting model.
+	if (light<gl_light_ambient && glset.lightmode != 8 && glset.lightmode != 16)		// ambient clipping only if not using software lighting model.
 	{
 		light = gl_light_ambient;
 		if (rellight<0) rellight>>=1;
 	}
 	return clamp(light+rellight, 0, 255);
+
+	//[GEC] R_SetLightFactor
+	/*int newlight = clamp(light+rellight, 0, 255);
+	float f = Factor / 100.0f;
+	int New_light = MIN((int)((float)newlight * f), 255);
+	return New_light;*/
 }
 
 //==========================================================================
@@ -245,6 +251,10 @@ PalEntry gl_CalcLightColor(int light, PalEntry pe, int blendfactor, bool force)
 	int r,g,b;
 
 	if (glset.lightmode == 8 && !force)
+	{
+		return pe;
+	}
+	else if (glset.lightmode == 16 && !force)//[GEC]
 	{
 		return pe;
 	}
@@ -265,12 +275,175 @@ PalEntry gl_CalcLightColor(int light, PalEntry pe, int blendfactor, bool force)
 	return PalEntry(BYTE(r), BYTE(g), BYTE(b));
 }
 
+/*// [GEC]
+//-----------------------------------------------------------------------------
+// dfcmp
+//-----------------------------------------------------------------------------
+
+bool dfcmp(float f1, float f2) {
+    float precision = 0.00001f;
+    if(((f1 - precision) < f2) &&
+            ((f1 + precision) > f2)) {
+        return true;
+    }
+    else {
+        return false;
+    }
+}
+//
+// R_LightGetHSV
+// Set HSV values based on given RGB
+//
+
+void R_LightGetHSV(int r, int g, int b, int *h, int *s, int *v) {
+    int min = r;
+    int max = r;
+    float delta = 0.0f;
+    float j = 0.0f;
+    float x = 0.0f;
+    float xr = 0.0f;
+    float xg = 0.0f;
+    float xb = 0.0f;
+    float sum = 0.0f;
+
+    if(g < min) {
+        min = g;
+    }
+    if(b < min) {
+        min = b;
+    }
+
+    if(g > max) {
+        max = g;
+    }
+    if(b > max) {
+        max = b;
+    }
+
+    delta = ((float)max / 255.0f);
+
+    if(dfcmp(delta, 0.0f)) {
+        delta = 0;
+    }
+    else {
+        j = ((delta - ((float)min / 255.0f)) / delta);
+    }
+
+    if(!dfcmp(j, 0.0f)) {
+        xr = ((float)r / 255.0f);
+
+        if(!dfcmp(xr, delta)) {
+            xg = ((float)g / 255.0f);
+
+            if(!dfcmp(xg, delta)) {
+                xb = ((float)b / 255.0f);
+
+                if(dfcmp(xb, delta)) {
+                    sum = ((((delta - xg) / (delta - (min / 255.0f))) + 4.0f) -
+                           ((delta - xr) / (delta - (min / 255.0f))));
+                }
+            }
+            else {
+                sum = ((((delta - xr) / (delta - (min / 255.0f))) + 2.0f) -
+                       ((delta - (b / 255.0f)) /(delta - (min / 255.0f))));
+            }
+        }
+        else {
+            sum = (((delta - (b / 255.0f))) / (delta - (min / 255.0f))) -
+                  ((delta - (g / 255.0f)) / (delta - (min / 255.0f)));
+        }
+
+        x = (sum * 60.0f);
+
+        if(x < 0) {
+            x += 360.0f;
+        }
+    }
+    else {
+        j = 0.0f;
+    }
+
+    *h = (int)((x / 360.0f) * 255.0f);
+    *s = (int)(j * 255.0f);
+    *v = (int)(delta * 255.0f);
+}
+
+//
+// R_LightGetRGB
+// Set RGB values based on given HSV
+//
+
+void R_LightGetRGB(int h, int s, int v, int *r, int *g, int *b) {
+    float x = 0.0f;
+    float j = 0.0f;
+    float i = 0.0f;
+    int table = 0;
+    float xr = 0.0f;
+    float xg = 0.0f;
+    float xb = 0.0f;
+
+    j = (h / 255.0f) * 360.0f;
+
+    if(360.0f <= j) {
+        j -= 360.0f;
+    }
+
+    x = (s / 255.0f);
+    i = (v / 255.0f);
+
+    if(!dfcmp(x, 0.0f)) {
+        table = (int)(j / 60.0f);
+        if(table < 6) {
+            float t = (j / 60.0f);
+            switch(table) {
+            case 0:
+                xr = i;
+                xg = ((1.0f - ((1.0f - (t - (float)table)) * x)) * i);
+                xb = ((1.0f - x) * i);
+                break;
+            case 1:
+                xr = ((1.0f - (x * (t - (float)table))) * i);
+                xg = i;
+                xb = ((1.0f - x) * i);
+                break;
+            case 2:
+                xr = ((1.0f - x) * i);
+                xg = i;
+                xb = ((1.0f - ((1.0f - (t - (float)table)) * x)) * i);
+                break;
+            case 3:
+                xr = ((1.0f - x) * i);
+                xg = ((1.0f - (x * (t - (float)table))) * i);
+                xb = i;
+                break;
+            case 4:
+                xr = ((1.0f - ((1.0f - (t - (float)table)) * x)) * i);
+                xg = ((1.0f - x) * i);
+                xb = i;
+                break;
+            case 5:
+                xr = i;
+                xg = ((1.0f - x) * i);
+                xb = ((1.0f - (x * (t - (float)table))) * i);
+                break;
+            }
+        }
+    }
+    else {
+        xr = xg = xb = i;
+    }
+
+    *r = (int)(xr * 255.0f);
+    *g = (int)(xg * 255.0f);
+    *b = (int)(xb * 255.0f);
+}*/
+
 //==========================================================================
 //
 // Get current light color
 //
 //==========================================================================
-void gl_GetLightColor(int lightlevel, int rellight, const FColormap * cm, float * pred, float * pgreen, float * pblue, bool weapon)
+void gl_GetLightColor(int lightlevel, int rellight, const FColormap * cm, float * pred, float * pgreen, float * pblue, bool weapon, bool fullbright)//[GEC]
 {
 	float & r=*pred,& g=*pgreen,& b=*pblue;
 	int torch=0;
@@ -297,11 +470,44 @@ void gl_GetLightColor(int lightlevel, int rellight, const FColormap * cm, float 
 	PalEntry lightcolor = cm? cm->LightColor : PalEntry(255,255,255);
 	int blendfactor = cm? cm->blendfactor : 0;
 
+	int getrellight = rellight;
+	if(glset.lightmode == 16)//[GEC] psx doom set rell color
+	{
+		rellight = 0;
+	}
+
 	lightlevel = gl_CalcLightLevel(lightlevel, rellight, weapon);
 	PalEntry pe = gl_CalcLightColor(lightlevel, lightcolor, blendfactor);
-	r = pe.r/255.f;
-	g = pe.g/255.f;
-	b = pe.b/255.f;
+
+	if(glset.lightmode == 16)//[GEC] psx doom set rell color
+	{
+		r = clamp(pe.r + getrellight, 0, 255)/255.f;
+		g = clamp(pe.g + getrellight, 0, 255)/255.f;
+		b = clamp(pe.b + getrellight, 0, 255)/255.f;
+	}
+	else
+	{
+		r = pe.r/255.f;
+		g = pe.g/255.f;
+		b = pe.b/255.f;
+	}
+	/*if(!fullbright)
+	{
+		float f = Factor / 100.0f;
+		int h, s, v;
+		int R, G, B;
+
+		//[GEC]
+		R_LightGetHSV((int)(r * 255), (int)(g * 255), (int)(b * 255), &h, &s, &v);
+
+		v = MIN((int)((float)v * f), 255);
+		
+		R_LightGetRGB(h, s, v, (int*)&R, (int*)&G, (int*)&B);
+
+		r = (float)R/255.0f;//r * ThingColor.r/255.0f;
+		g = (float)G/255.0f;//g * ThingColor.g/255.0f;
+		b = (float)B/255.0f;//b * ThingColor.b/255.0f;
+	}*/
 }
 
 //==========================================================================
@@ -309,10 +515,11 @@ void gl_GetLightColor(int lightlevel, int rellight, const FColormap * cm, float 
 // set current light color
 //
 //==========================================================================
-void gl_SetColor(int light, int rellight, const FColormap * cm, float *red, float *green, float *blue, PalEntry ThingColor, bool weapon)
+void gl_SetColor(int light, int rellight, const FColormap * cm, float *red, float *green, float *blue, PalEntry ThingColor, bool weapon, bool fullbright)//[GEC]
 { 
 	float r,g,b;
-	gl_GetLightColor(light, rellight, cm, &r, &g, &b, weapon);
+
+	gl_GetLightColor(light, rellight, cm, &r, &g, &b, weapon, fullbright);//[GEC]
 
 	*red = r * ThingColor.r/255.0f;
 	*green = g * ThingColor.g/255.0f;
@@ -324,19 +531,26 @@ void gl_SetColor(int light, int rellight, const FColormap * cm, float *red, floa
 // set current light color
 //
 //==========================================================================
-void gl_SetColor(int light, int rellight, const FColormap * cm, float alpha, PalEntry ThingColor, bool weapon)
+void gl_SetColor(int light, int rellight, const FColormap * cm, float alpha, PalEntry ThingColor, bool weapon, bool fullbright)//[GEC]
 { 
 	float r,g,b;
+	float f = Factor / 100.0f;
 
-	gl_GetLightColor(light, rellight, cm, &r, &g, &b, weapon);
+	gl_GetLightColor(light, rellight, cm, &r, &g, &b, weapon, fullbright);//[GEC]
 
-	if (glset.lightmode != 8)
+	/*if ((glset.lightmode != 8) || (glset.lightmode != 16))
 	{
-		glColor4f(r * ThingColor.r/255.0f, g * ThingColor.g/255.0f, b * ThingColor.b/255.0f, alpha);
-	}
-	else
+		r *= ThingColor.r/255.0f;
+		g *= ThingColor.g/255.0f;
+		b *= ThingColor.b/255.0f;
+
+		glColor4f(r, g, b, alpha);
+	}*/
+	//else
+	if ((glset.lightmode == 8) || (glset.lightmode == 16))
 	{ 
 		glColor4f(r, g, b, alpha);
+		gl_RenderState.SetFragColor(r, g, b, alpha);//[GEC]
 
 		if (gl_fixedcolormap)
 		{
@@ -345,8 +559,26 @@ void gl_SetColor(int light, int rellight, const FColormap * cm, float alpha, Pal
 		else
 		{
 			float lightlevel = gl_CalcLightLevel(light, rellight, weapon) / 255.0f;
+
+			/*if(!fullbright)//[GEC]
+			{
+				//[GEC] R_SetLightFactor
+				int getlight = gl_CalcLightLevel(light, rellight, weapon);
+				int New_light = MIN((int)((float)getlight * f), 255);
+				lightlevel = (float)New_light / 255.0f;
+			}*/
+
 			glVertexAttrib1f(VATTR_LIGHTLEVEL, lightlevel); 
 		}
+	}
+	else
+	{
+		r *= ThingColor.r/255.0f;
+		g *= ThingColor.g/255.0f;
+		b *= ThingColor.b/255.0f;
+
+		glColor4f(r, g, b, alpha);
+		gl_RenderState.SetFragColor(r, g, b, alpha);//[GEC]
 	}
 }
 
@@ -407,6 +639,11 @@ float gl_GetFogDensity(int lightlevel, PalEntry fogcolor)
 	else 
 	{
 		density = 0.f;
+	}
+
+	if(level.FadeLinear)//[GEC]
+	{
+		density += 1;
 	}
 	return density;
 }
@@ -612,6 +849,9 @@ void gl_SetFog(int lightlevel, int rellight, const FColormap *cmap, bool isaddit
 
 		// Korshun: fullbright fog like in software renderer.
 		if (glset.lightmode == 8 && glset.brightfog && fogdensity != 0 && fogcolor != 0)
+			glVertexAttrib1f(VATTR_LIGHTLEVEL, 1.0);
+
+		if (glset.lightmode == 16 && glset.brightfog && fogdensity != 0 && fogcolor != 0)
 			glVertexAttrib1f(VATTR_LIGHTLEVEL, 1.0);
 	}
 }

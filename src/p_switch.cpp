@@ -245,7 +245,7 @@ bool P_CheckSwitchRange(AActor *user, line_t *line, int sideno)
 
 bool P_ChangeSwitchTexture (side_t *side, int useAgain, BYTE special, bool *quest)
 {
-	int texture;
+	/*int texture;
 	int sound;
 	FSwitchDef *Switch;
 
@@ -262,6 +262,61 @@ bool P_ChangeSwitchTexture (side_t *side, int useAgain, BYTE special, bool *ques
 		texture = side_t::mid;
 	}
 	else
+	{
+		if (quest != NULL)
+		{
+			*quest = false;
+		}
+		return false;
+	}*/
+
+	int texture = -1;//[GEC]
+	int sound;
+	FSwitchDef *Switch;
+
+	if(SWITCHMASK(side->linedef->gecflags) == ML_SWITCHX04)//[GEC]
+	{
+		if ((Switch = TexMan.FindSwitch (side->GetTexture(side_t::bottom))) != NULL)
+		{
+			texture = side_t::bottom;
+		}
+	}
+	else if(SWITCHMASK(side->linedef->gecflags) == ML_SWITCHX02)//[GEC]
+	{
+		if ((Switch = TexMan.FindSwitch (side->GetTexture(side_t::top))) != NULL)
+		{
+			texture = side_t::top;
+		}
+	}
+	else if(SWITCHMASK(side->linedef->gecflags) == (ML_SWITCHX02 | ML_SWITCHX04))//[GEC]
+	{
+		if ((Switch = TexMan.FindSwitch (side->GetTexture(side_t::mid))) != NULL)
+		{
+			texture = side_t::mid;
+		}
+	}
+	else if ((Switch = TexMan.FindSwitch (side->GetTexture(side_t::top))) != NULL)
+	{
+		texture = side_t::top;
+	}
+	else if ((Switch = TexMan.FindSwitch (side->GetTexture(side_t::bottom))) != NULL)
+	{
+		texture = side_t::bottom;
+	}
+	else if ((Switch = TexMan.FindSwitch (side->GetTexture(side_t::mid))) != NULL)
+	{
+		texture = side_t::mid;
+	}
+	else
+	{
+		if (quest != NULL)
+		{
+			*quest = false;
+		}
+		return false;
+	}
+	
+	if(texture == -1)//[GEC]
 	{
 		if (quest != NULL)
 		{
@@ -313,6 +368,63 @@ bool P_ChangeSwitchTexture (side_t *side, int useAgain, BYTE special, bool *ques
 		*quest = Switch->QuestPanel;
 	}
 	return true;
+}
+
+//==========================================================================
+//
+// [GEC] D64P_CheckUseHeight
+//
+//==========================================================================
+bool P_CheckUseHeight(line_t *line, AActor *user, int sideno)
+{
+	//Printf("P_CheckUseHeight\n");
+    fixed_t check = 0;
+
+	if(!(line->gecflags & ML_SWITCHX02 ||
+         line->gecflags & ML_SWITCHX04 ||
+         line->gecflags & ML_SWITCHX08))
+	{
+        return true;    // ignore non-switches
+    }
+
+	int texpos = 0;
+
+    if(SWITCHMASK(line->gecflags) == ML_SWITCHX02) {
+		texpos = side_t::top;
+    }
+    else if(SWITCHMASK(line->gecflags) == ML_SWITCHX04) {
+		texpos = side_t::bottom;
+    }
+    else {
+		texpos = side_t::mid;
+    }
+
+    if(line->gecflags & ML_CHECKFLOORHEIGHT)
+	{
+        if(line->flags & ML_TWOSIDED) {
+			check = (line->backsector->GetPlaneTexZ(sector_t::floor) + line->sidedef[sideno]->GetTextureYOffset(texpos)) - (32*FRACUNIT);
+        }
+        else {
+            check = (line->frontsector->GetPlaneTexZ(sector_t::floor) + line->sidedef[sideno]->GetTextureYOffset(texpos)) + (32*FRACUNIT);
+        }
+    }
+    else if(line->flags & ML_TWOSIDED) {
+        check = (line->backsector->GetPlaneTexZ(sector_t::ceiling) + line->sidedef[sideno]->GetTextureYOffset(texpos)) + (32*FRACUNIT);
+    }
+    else {
+        return true;
+    }
+
+    if(!(check < user->Z())) {
+        if((user->Z() + user->height) < check) {
+            return false;
+        }
+    }
+    else {
+        return false;
+    }
+
+    return true;
 }
 
 //==========================================================================
@@ -426,6 +538,9 @@ bool DActiveButton::AdvanceFrame ()
 		if (bFlippable == true)
 		{
 			m_Timer = BUTTONTIME;
+
+			if(gameinfo.ticrate30)//[GEC]
+				m_Timer /= 2;
 		}
 		else
 		{

@@ -79,7 +79,8 @@ void DCeiling::Serialize (FArchive &arc)
 		<< m_NewSpecial
 		<< m_Tag
 		<< m_OldDirection
-		<< m_Hexencrush;
+		<< m_Hexencrush
+		<< m_D64Mode;//[GEC]
 }
 
 //============================================================================
@@ -139,6 +140,13 @@ void DCeiling::Tick ()
 				if (!SN_IsMakingLoopingSound (m_Sector))
 					PlayCeilingSound ();
 				break;
+
+			case silentCrushAndRaise://[GEC]
+				m_Direction = -1;
+				m_Speed = m_Speed2;
+				if (!SN_IsMakingLoopingSound (m_Sector))
+					PlayCeilingSound ();
+				break;
 				
 			// movers with texture change, change the texture then get removed
 			case genCeilingChgT:
@@ -166,6 +174,7 @@ void DCeiling::Tick ()
 			{
 			case ceilCrushAndRaise:
 			case ceilCrushRaiseAndStay:
+			case silentCrushAndRaise://[GEC]
 				m_Speed = m_Speed2;
 				m_Direction = 1;
 				if (!SN_IsMakingLoopingSound (m_Sector))
@@ -196,7 +205,12 @@ void DCeiling::Tick ()
 				case ceilCrushAndRaise:
 				case ceilLowerAndCrush:
 				case ceilLowerAndCrushDist:
-					if (m_Speed1 == FRACUNIT && m_Speed2 == FRACUNIT)
+					if(m_D64Mode)//[GEC]
+					{
+						m_Speed = (FRACUNIT*2) / 8;
+						break;
+					}
+					else if (m_Speed1 == FRACUNIT && m_Speed2 == FRACUNIT)
 						m_Speed = FRACUNIT / 8;
 						break;
 
@@ -228,6 +242,7 @@ DCeiling::DCeiling (sector_t *sec, fixed_t speed1, fixed_t speed2, int silent)
 	m_Speed = m_Speed1 = speed1;
 	m_Speed2 = speed2;
 	m_Silent = silent;
+	m_D64Mode = false;//[GEC]
 }
 
 //============================================================================
@@ -238,7 +253,7 @@ DCeiling::DCeiling (sector_t *sec, fixed_t speed1, fixed_t speed2, int silent)
 
 DCeiling *DCeiling::Create(sector_t *sec, DCeiling::ECeiling type, line_t *line, int tag, 
 				   fixed_t speed, fixed_t speed2, fixed_t height,
-				   int crush, int silent, int change, bool hexencrush)
+				   int crush, int silent, int change, bool hexencrush, bool d64mode)
 {
 	fixed_t		targheight = 0;	// Silence, GCC
 
@@ -256,6 +271,7 @@ DCeiling *DCeiling::Create(sector_t *sec, DCeiling::ECeiling type, line_t *line,
 	{
 	case ceilCrushAndRaise:
 	case ceilCrushRaiseAndStay:
+	case silentCrushAndRaise://[GEC]
 		ceiling->m_TopHeight = sec->ceilingplane.d;
 	case ceilLowerAndCrush:
 	case ceilLowerAndCrushDist:
@@ -264,7 +280,7 @@ DCeiling *DCeiling::Create(sector_t *sec, DCeiling::ECeiling type, line_t *line,
 		{
 			targheight += 8*FRACUNIT;
 		}
-		else if (type == ceilCrushAndRaise)
+		else if (type == ceilCrushAndRaise || type == silentCrushAndRaise || ceilCrushRaiseAndStay)//[GEC]
 		{
 			targheight += height;
 		}
@@ -396,6 +412,7 @@ DCeiling *DCeiling::Create(sector_t *sec, DCeiling::ECeiling type, line_t *line,
 	ceiling->m_Type = type;
 	ceiling->m_Crush = crush;
 	ceiling->m_Hexencrush = hexencrush;
+	ceiling->m_D64Mode = d64mode;//[GEC]
 
 	// Do not interpolate instant movement ceilings.
 	// Note for ZDoomGL: Check to make sure that you update the sector
@@ -412,7 +429,7 @@ DCeiling *DCeiling::Create(sector_t *sec, DCeiling::ECeiling type, line_t *line,
 	}
 	if (ceiling->m_Speed >= movedist)
 	{
-		ceiling->StopInterpolation();
+		ceiling->StopInterpolation(true);
 	}
 
 	// set texture/type change properties
@@ -484,7 +501,7 @@ DCeiling *DCeiling::Create(sector_t *sec, DCeiling::ECeiling type, line_t *line,
 
 bool EV_DoCeiling (DCeiling::ECeiling type, line_t *line,
 				   int tag, fixed_t speed, fixed_t speed2, fixed_t height,
-				   int crush, int silent, int change, bool hexencrush)
+				   int crush, int silent, int change, bool hexencrush, bool d64mode)//[GEC]
 {
 	int 		secnum;
 	bool 		rtn;
@@ -501,12 +518,12 @@ bool EV_DoCeiling (DCeiling::ECeiling type, line_t *line,
 		// [RH] Hack to let manual crushers be retriggerable, too
 		tag ^= secnum | 0x1000000;
 		P_ActivateInStasisCeiling (tag);
-		return !!DCeiling::Create(sec, type, line, tag, speed, speed2, height, crush, silent, change, hexencrush);
+		return !!DCeiling::Create(sec, type, line, tag, speed, speed2, height, crush, silent, change, hexencrush, d64mode);//[GEC]
 	}
 	
 	//	Reactivate in-stasis ceilings...for certain types.
 	// This restarts a crusher after it has been stopped
-	if (type == DCeiling::ceilCrushAndRaise)
+	if (type == DCeiling::ceilCrushAndRaise || type == DCeiling::silentCrushAndRaise)//[GEC]
 	{
 		P_ActivateInStasisCeiling (tag);
 	}
@@ -515,7 +532,7 @@ bool EV_DoCeiling (DCeiling::ECeiling type, line_t *line,
 	FSectorTagIterator it(tag);
 	while ((secnum = it.Next()) >= 0)
 	{
-		rtn |= !!DCeiling::Create(&sectors[secnum], type, line, tag, speed, speed2, height, crush, silent, change, hexencrush);
+		rtn |= !!DCeiling::Create(&sectors[secnum], type, line, tag, speed, speed2, height, crush, silent, change, hexencrush, d64mode);//[GEC]
 	}
 	return rtn;
 }

@@ -59,7 +59,7 @@ void AWeapon::Serialize (FArchive &arc)
 		<< MoveCombatDist
 		<< Ammo1 << Ammo2 << SisterWeapon << GivenAsMorphWeapon
 		<< bAltFire
-		<< ReloadCounter;		
+		<< ReloadCounter;	
 		if (SaveVersion >= 3615) {
 			arc << BobStyle << BobSpeed << BobRangeX << BobRangeY;
 		}
@@ -69,6 +69,11 @@ void AWeapon::Serialize (FArchive &arc)
 	{
 		arc << MinSelAmmo1 << MinSelAmmo2;
 	}
+
+	arc << W_RESH //[GEC] Escala en x
+		<< W_RESW //[GEC] Escala en y
+		<< FlashRenderStyle //[GEC] Flash Render Style
+		<< Flash_Alpha; //[GEC] Escala en y
 }
 
 //===========================================================================

@@ -13,6 +13,18 @@
 	varying float lightlevel;
 #endif
 
+uniform int uPalLightLevels;//[GEC]
+uniform int uSoftLightPsx;//[GEC]
+uniform int uSetLightMode;//[GEC]
+uniform float uPsxBrightLevel;//[GEC]
+uniform float uLight64;//[GEC]
+uniform vec4 uBlendColor;
+uniform int uBlendMode;//[GEC]
+uniform int uFadeLinear;//[GEC]
+uniform int uPsxColor;//[GEC]
+uniform int uWrapS;//[GEC]
+uniform int uWrapT;//[GEC]
+
 void main()
 {
 	#ifdef SOFTLIGHT

@@ -38,6 +38,9 @@ extern DWORD			r_FrameTime;
 extern int				extralight;
 extern unsigned int		R_OldBlend;
 
+extern					PalEntry flashcolor;// [GEC]
+extern					bool psx_blend;// [GEC]
+
 const int				r_Yaspect = 200;	// Why did I make this a variable? It's never set anywhere.
 
 //==========================================================================

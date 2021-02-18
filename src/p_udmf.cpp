@@ -729,6 +729,13 @@ public:
 				th->scaleX = th->scaleY = CheckFixed(key);
 				break;
 
+			//-----[GEC]_STUFF-----STR//
+			case NAME_No_Infighting:
+				CHECK_N(Hx | Zd | Zdt | Va)
+				Flag(th->flags, MTF_NOINFIGHTING, key); 
+				break;
+			//-----[GEC]_STUFF-----END//
+
 			default:
 				CHECK_N(Zd | Zdt)
 				if (0 == strnicmp("user_", key.GetChars(), 5))
@@ -913,6 +920,93 @@ public:
 				CHECK_N(Dm | Zd | Zdt | Va)
 				passuse = CheckBool(key); 
 				continue;
+
+				//-----[GEC]_STUFF-----STR//
+			case NAME_Peg_Upper_Wall_Color:
+				Flag(ld->gecflags, ML_PEG_UPPER_WALL_COLOR, key);
+				continue;
+
+			case NAME_Peg_Lower_Wall_Color:
+				Flag(ld->gecflags, ML_PEG_LOWER_WALL_COLOR, key);
+				continue;
+
+			case NAME_Flip_Upper_Pegged_Color:
+				Flag(ld->gecflags, ML_FLIP_UPPER_PEGGED_COLOR, key);
+				continue;
+
+			case NAME_Use_Multicolors:
+				Flag(ld->gecflags, ML_USE_MULTICOLORS, key);
+				continue;
+
+			case NAME_Vertical_Door:
+				Flag(ld->gecflags, ML_VERTICALDOOR, key);
+				continue;
+
+			case NAME_Uv_Wrap_H_Mirror:
+				Flag(ld->gecflags, ML_UV_WRAP_H_MIRROR, key);
+				continue;
+
+			case NAME_Uv_Wrap_V_Mirror:
+				Flag(ld->gecflags, ML_UV_WRAP_V_MIRROR, key);
+				continue;
+
+			case NAME_No_Occlusion:
+				Flag(ld->gecflags, ML_NO_OCCLUSION, key);
+				break;
+
+			case NAME_Sky_Hack_Console:
+				Flag(ld->gecflags, ML_SKY_HACK_CONSOLE, key);
+				break;
+
+			case NAME_EnableAlphaTest:
+				Flag(ld->gecflags, ML_ALPHA_TEST, key);
+				break;
+
+			case NAME_No_RenderMidTex:
+				Flag(ld->gecflags, ML_NO_RENDERMIDTEX, key);
+				break;
+
+			case NAME_Dont_Peg_Middle:
+				Flag(ld->gecflags, ML_DONTPEGMIDDLE, key);
+				break;
+
+			case NAME_Switchx02:
+				Flag(ld->gecflags, ML_SWITCHX02, key);
+				break;
+
+			case NAME_Switchx04:
+				Flag(ld->gecflags, ML_SWITCHX04, key);
+				break;
+
+			case NAME_Switchx08:
+				Flag(ld->gecflags, ML_SWITCHX08, key);
+				break;
+
+			case NAME_CheckFloorHgt:
+				Flag(ld->gecflags, ML_CHECKFLOORHEIGHT, key);
+				break;
+
+			case NAME_Scroll_Right:
+				Flag(ld->gecflags, ML_SCROLL_WALL_RIGHT, key);
+				continue;
+
+			case NAME_Scroll_Left:
+				Flag(ld->gecflags, ML_SCROLL_WALL_LEFT, key);
+				continue;
+
+			case NAME_Scroll_Up:
+				Flag(ld->gecflags, ML_SCROLL_WALL_UP, key);
+				continue;
+
+			case NAME_Scroll_Down:
+				Flag(ld->gecflags, ML_SCROLL_WALL_DOWN, key);
+				continue;
+
+			case NAME_NoSwitchAnimate:
+				Flag(ld->gecflags, ML_NOSWITCHANIMATE, key);
+				continue;
+
+				//-----[GEC]_STUFF-----END//
 
 			default:
 				break;
@@ -1287,6 +1381,7 @@ public:
 
 		memset(sec, 0, sizeof(*sec));
 		sec->lightlevel = 160;
+		sec->lightlevel_64 = 0;//[GEC]
 		sec->SetXScale(sector_t::floor, FRACUNIT);	// [RH] floor and ceiling scaling
 		sec->SetYScale(sector_t::floor, FRACUNIT);
 		sec->SetXScale(sector_t::ceiling, FRACUNIT);
@@ -1302,6 +1397,9 @@ public:
 		sec->sectornum = index;
 		sec->damageinterval = 32;
 		sec->terrainnum[sector_t::ceiling] = sec->terrainnum[sector_t::floor] = -1;
+		memset(sec->SpecialColors, 0xffffffff, sizeof(sec->SpecialColors));//[GEC]
+		memset(sec->SpecialColorsBase, 0xffffffff, sizeof(sec->SpecialColorsBase));//[GEC]
+		sec->EnvironmentSector = NULL;//[GEC]
 		if (floordrop) sec->Flags = SECF_FLOORDROP;
 		// killough 3/7/98: end changes
 
@@ -1346,6 +1444,7 @@ public:
 					if (sec->special < 0 || sec->special > 255 || !HexenSectorSpecialOk[sec->special])
 						sec->special = 0;	// NULL all unknown specials
 				}
+				sec->cpyspecial = sec->special;		// [GEC] solo para copiar
 				continue;
 
 			case NAME_Id:
@@ -1566,6 +1665,87 @@ public:
 					tagstring = CheckString(key);
 					break;
 
+				//-----[GEC]_STUFF-----START//
+				case NAME_Color_Floor:
+					sec->SpecialColors[sector_t::floor] = sec->SpecialColorsBase[sector_t::floor] = CheckInt(key) | 0xff000000;
+					break;
+
+				case NAME_Color_Ceiling:
+					sec->SpecialColors[sector_t::ceiling] = sec->SpecialColorsBase[sector_t::ceiling] = CheckInt(key) | 0xff000000;
+					break;
+
+				case NAME_Color_Walltop:
+					sec->SpecialColors[sector_t::walltop] = sec->SpecialColorsBase[sector_t::walltop] = CheckInt(key) | 0xff000000;
+					break;
+
+				case NAME_Color_Wallbottom:
+					sec->SpecialColors[sector_t::wallbottom] = sec->SpecialColorsBase[sector_t::wallbottom] = CheckInt(key) | 0xff000000;
+					break;
+
+				case NAME_Color_Sprites:
+					sec->SpecialColors[sector_t::sprites] = sec->SpecialColorsBase[sector_t::sprites] = CheckInt(key) | 0xff000000;
+					break;
+
+				/*case NAME_Lightlevel2:
+					sec->lightlevel2 = sector_t::ClampLight(CheckInt(key));
+					break;
+
+				case NAME_Use_Multicolors:
+					Flag(sec->Flags, SECF_USE_MULTICOLORS, key);
+					break;*/
+
+				/*case NAME_Light_Effect:
+					Flag(sec->Flags, SECF_LIHGT_D64_MODE, key);
+					break;*/
+				case NAME_LiquidFloor:
+					Flag(sec->Flags, SECF_LIQUIDFLOOR, key);
+					break;
+
+				case NAME_Sync_Specials:
+					Flag(sec->Flags, SECF_SYNCSPECIALS, key);
+					break;
+
+				case NAME_Set_Ceiling_Scroll:
+					Flag(sec->Flags, SECF_SCROLLCEILING, key);
+					break;
+
+				case NAME_Set_Floor_Scroll:
+					Flag(sec->Flags, SECF_SCROLLFLOOR, key);
+					break;
+
+				case NAME_Toggle_Fast_Scroolling:
+					Flag(sec->Flags, SECF_SCROLLFAST, key);
+					break;
+
+				case NAME_Scroll_Right:
+					Flag(sec->Flags, SECF_SCROLLRIGHT, key);
+					break;
+
+				case NAME_Scroll_Left:
+					Flag(sec->Flags, SECF_SCROLLLEFT, key);
+					break;
+
+				case NAME_Scroll_Up:
+					Flag(sec->Flags, SECF_SCROLLUP, key);
+					break;
+
+				case NAME_Scroll_Down:
+					Flag(sec->Flags, SECF_SCROLLDOWN, key);
+					break;
+
+				case NAME_Sky_Hack_Console:
+					Flag(sec->Flags, SECF_SKY_HACK_CONSOLE, key);
+					break;
+
+				case NAME_EnvironmentSector:
+					sec->EnvironmentSector = S_FindEnvironment(CheckString(key));
+					break;
+
+				case NAME_Reverb_Off:
+					Flag(sec->Flags, SECF_REVERB_OFF, key);
+					break;
+					//-----[GEC]_STUFF-----END//
+
 				default:
 					break;
 			}
@@ -1665,6 +1845,9 @@ public:
 
 			sec->ColorMap = GetSpecialLights (lightcolor, fadecolor, desaturation);
 		}
+
+		// scale up light levels (experimental)
+		//sec->lightlevel = (sec->lightlevel * 11.0 / 18.0) + 96.0;
 	}
 
 	//===========================================================================

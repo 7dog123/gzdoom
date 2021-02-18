@@ -94,6 +94,19 @@ bool FIntermissionAction::ParseKey(FScanner &sc)
 		}
 		return true;
 	}
+	if (sc.Compare("nextmusic"))//[GEC]
+	{
+		sc.MustGetToken('=');
+		sc.MustGetToken(TK_StringConst);
+		mNextMusic = sc.String;
+		mMusicOrder = 0;
+		if (sc.CheckToken(','))
+		{
+			sc.MustGetToken(TK_IntConst);
+			mMusicOrder = sc.Number;
+		}
+		return true;
+	}
 	else if (sc.Compare("cdmusic"))
 	{
 		sc.MustGetToken('=');
@@ -244,7 +257,11 @@ bool FIntermissionActionWiper::ParseKey(FScanner &sc)
 		{ "Melt", GS_FORCEWIPEMELT },
 		{ "Burn", GS_FORCEWIPEBURN },
 		{ "Default", GS_FORCEWIPE },
-		{ NULL, GS_FORCEWIPE }
+		{ "Melt64", GS_FORCEWIPEMELT64 },//[GEC]
+		{ "FadeScreen", GS_FORCEWIPEFADESCREEN  },//[GEC]
+		{ "LoadingScreen", GS_FORCEWIPELOADINGSCREEN  },//[GEC]
+		{ "NullWipe", GS_FORCEWIPENONE  },//[GEC]
+		{ NULL, GS_FINALE }
 	};
 
 	if (sc.Compare("WipeType"))
@@ -273,10 +290,57 @@ FIntermissionActionTextscreen::FIntermissionActionTextscreen()
 	mTextY = -1;
 	mTextColor = CR_UNTRANSLATED;
 	mTextDelay = 10;
+
+	// [GEC]
+	m_TextAdd = false;
+	m_TextSpeed = -1;
+	m_TextDelay = -1;
+	m_TextResW = 0;
+	m_TextResH = 0;
+	m_TexX = 0;
+	m_TexY = 0;
+	m_PicResW = 0;
+	m_PicResH = 0;
+	m_PicX = 0;
+	m_PicY = 0;
+	m_CenterText = false;
+	m_FadeText = false;
+	m_PlainText = false;
+	m_PlainSync = false;
+	m_ScrollText = false;
+	m_ScrollTextSpeed = 0;
+	m_ScrollTextDirection = 0;
+	m_ScrollTextTime = 0;
+	m_RowPadding = FRACUNIT;
+	m_FontName = NULL;
+	m_WipeOut = GS_FINALE;
+	m_NoSkip = false;
+	m_AutoSkip = false;
 }
 
 bool FIntermissionActionTextscreen::ParseKey(FScanner &sc)
 {
+	enum EScrollDir
+	{
+		SCROLL_Left,
+		SCROLL_Right,
+		SCROLL_Up,
+		SCROLL_Down,
+	};
+
+	struct ScrollType//[GEC]
+	{
+		const char *Name;
+		EScrollDir Type;
+	}
+	const ST[] = {
+		{ "Left", SCROLL_Left },
+		{ "Right", SCROLL_Right },
+		{ "Up", SCROLL_Up },
+		{ "Down", SCROLL_Down },
+		{ NULL, SCROLL_Up }
+	};
+
 	if (sc.Compare("Position"))
 	{
 		sc.MustGetToken('=');
@@ -345,6 +409,93 @@ bool FIntermissionActionTextscreen::ParseKey(FScanner &sc)
 		mTextSpeed = sc.Number;
 		return true;
 	}
+	// [GEC] Stuff
+	else if (sc.Compare("textadd"))//[GEC]
+	{
+		m_TextAdd = true;
+		return true;
+	}
+	else if (sc.Compare("textresolution"))//[GEC]
+	{
+		sc.MustGetToken('=');
+		sc.MustGetToken(TK_IntConst);
+		m_TextResW = sc.Number;
+		sc.MustGetToken(',');
+		sc.MustGetToken(TK_IntConst);
+		m_TextResH = sc.Number;
+		return true;
+	}
+	else if (sc.Compare("centertext"))//[GEC]
+	{
+		m_CenterText = true;
+		return true;
+	}
+	else if (sc.Compare("fadetext"))//[GEC]
+	{
+		m_FadeText = true;
+		return true;
+	}
+	else if (sc.Compare("plaintext"))//[GEC]
+	{
+		m_PlainText = true;
+		return true;
+	}
+	else if (sc.Compare("plainsync"))//[GEC]
+	{
+		m_PlainSync = true;
+		return true;
+	}
+	else if (sc.Compare("scrolltext"))//[GEC]
+	{
+		m_ScrollText = true;
+		return true;
+	}
+	else if (sc.Compare("noskip"))//[GEC]
+	{
+		m_NoSkip = true;
+		return true;
+	}
+	else if (sc.Compare("autoskip"))//[GEC]
+	{
+		m_AutoSkip = true;
+		return true;
+	}
+	else if (sc.Compare("scrolltextspeed"))//[GEC]
+	{
+		sc.MustGetToken('=');
+		sc.MustGetToken(TK_IntConst);
+		m_ScrollTextSpeed = sc.Number;
+		return true;
+	}
+	else if (sc.Compare("scrolltextdirection"))//[GEC]
+	{
+		sc.MustGetToken('=');
+		sc.MustGetToken(TK_Identifier);
+		int v = sc.MatchString(&ST[0].Name, sizeof(ST[0]));
+		if (v != -1) m_ScrollTextDirection = ST[v].Type;
+		return true;
+	}
+	else if (sc.Compare("scrolltime"))//[GEC]
+	{
+		sc.MustGetToken('=');
+		sc.MustGetToken(TK_IntConst);
+		m_ScrollTextTime = sc.Number;
+		return true;
+	}
+	else if (sc.Compare("rowpadding"))//[GEC]
+	{
+		sc.MustGetToken('=');
+		sc.MustGetNumber();
+		m_RowPadding = sc.Number;
+		return true;
+	}
+	else if (sc.Compare("fontname"))//[GEC]
+	{
+		sc.MustGetToken('=');
+		sc.MustGetToken(TK_StringConst);
+		m_FontName = sc.String;
+		return true;
+	}
 	else return Super::ParseKey(sc);
 }
 
@@ -358,6 +509,19 @@ FIntermissionActionCast::FIntermissionActionCast()
 {
 	mSize = sizeof(FIntermissionActionCast);
 	mClass = RUNTIME_CLASS(DIntermissionScreenCast);
+	mFontName = NULL;//[GEC]
+	mYpos = FRACUNIT;//[GEC]
+	mYpos2 = 0;//[GEC]
+	mXpos2 = 0;//[GEC]
+	mResW = 0;//[GEC]
+	mResH = 0;//[GEC]
+	mcastrotation = false;//[GEC]
+	mlightplus = 0;//[GEC]
+	mlightmax = 0;//[GEC]
+	mShotSound = NULL;//[GEC]
+	mTextColor = CR_UNTRANSLATED;//[GEC]
+	mYposSprite = FRACUNIT;//[GEC]
+	mCenterXSprite = false;//[GEC]
 }
 
 bool FIntermissionActionCast::ParseKey(FScanner &sc)
@@ -367,6 +531,72 @@ bool FIntermissionActionCast::ParseKey(FScanner &sc)
 		sc.MustGetToken('=');
 		sc.MustGetToken(TK_StringConst);
 		mName = sc.String;
+		if(sc.CheckToken(',')) //[GEC] mYpos
+		{
+			sc.MustGetToken(TK_IntConst);
+			mYpos = sc.Number;
+		}
+		return true;
+	}
+	else if (sc.Compare("CastSetResolution"))
+	{
+		sc.MustGetToken('=');
+		sc.MustGetToken(TK_IntConst);
+		mResW = sc.Number;
+		sc.MustGetToken(',');
+		sc.MustGetToken(TK_IntConst);
+		mResH = sc.Number;
+		return true;
+	}
+	else if (sc.Compare("CastSetFont"))
+	{
+		sc.MustGetToken('=');
+		sc.MustGetToken(TK_StringConst);
+		mFontName = sc.String;
+		return true;
+	}
+	else if (sc.Compare("CastTextDraw"))
+	{
+		sc.MustGetToken('=');
+		sc.MustGetToken(TK_StringConst);
+		mText = sc.String;
+		if(sc.CheckToken(',')) //[GEC] mXpos mYpos
+		{
+			sc.MustGetToken(TK_IntConst);
+			mXpos2 = sc.Number;
+			sc.MustGetToken(',');
+			sc.MustGetToken(TK_IntConst);
+			mYpos2 = sc.Number;
+		}
+		return true;
+	}
+	else if (sc.Compare("CastShotSound"))
+	{
+		sc.MustGetToken('=');
+		sc.MustGetToken(TK_StringConst);
+		mShotSound = sc.String;
+		return true;
+	}
+	else if (sc.Compare("CastTextColor"))
+	{
+		sc.MustGetToken('=');
+		sc.MustGetToken(TK_StringConst);
+		mTextColor = V_FindFontColor(sc.String);
+		return true;
+	}
+	else if (sc.Compare("CastLightin"))
+	{
+		sc.MustGetToken('=');
+		sc.MustGetToken(TK_IntConst);
+		mlightplus = sc.Number;
+		sc.MustGetToken(',');
+		sc.MustGetToken(TK_IntConst);
+		mlightmax = sc.Number;
+		return true;
+	}
+	else if (sc.Compare("CastRotate"))
+	{
+		mcastrotation = true;
 		return true;
 	}
 	else if (sc.Compare("CastClass"))
@@ -374,6 +604,18 @@ bool FIntermissionActionCast::ParseKey(FScanner &sc)
 		sc.MustGetToken('=');
 		sc.MustGetToken(TK_StringConst);
 		mCastClass = sc.String;
+		if(sc.CheckToken(',')) //[GEC] mYpos
+		{
+			sc.MustGetToken(TK_IntConst);
+			mYposSprite = sc.Number;
+		}
+		if(sc.CheckToken(',')) //[GEC] mCenterXSprite
+		{
+			if(sc.CheckToken(TK_True)) 
+				mCenterXSprite = true;
+			else if(sc.CheckToken(TK_False)) 
+				mCenterXSprite = false;
+		}
 		return true;
 	}
 	else if (sc.Compare("AttackSound"))
@@ -816,12 +1058,56 @@ FName FMapInfoParser::CheckEndSequence()
 
 void F_StartFinale (const char *music, int musicorder, int cdtrack, unsigned int cdid, const char *flat, 
 					const char *text, INTBOOL textInLump, INTBOOL finalePic, INTBOOL lookupText, 
-					bool ending, FName endsequence)
+					bool ending, FName endsequence, cluster_info_t * cluster)
 {
 	// Hexen's chess ending doesn't have a text screen, even if the cluster has a message defined.
 	if (text != NULL && *text != 0 && endsequence != NAME_Inter_Chess)
 	{
 		FIntermissionActionTextscreen *textscreen = new FIntermissionActionTextscreen;
+
+		if(cluster != NULL)//[GEC]
+		{
+			textscreen->m_TextAdd = cluster->TextAdd;
+			textscreen->m_TextSpeed = cluster->TextSpeed;
+			textscreen->m_TextDelay = cluster->TextDelay;
+			textscreen->m_TextResW = cluster->TextResW;
+			textscreen->m_TextResH = cluster->TextResH;
+			textscreen->m_TexX = cluster->TextX;
+			textscreen->m_TexY = cluster->TextY;
+			textscreen->m_PicResW = cluster->PicResW;
+			textscreen->m_PicResH = cluster->PicResH;
+			textscreen->m_PicX = cluster->PicX;
+			textscreen->m_PicY = cluster->PicY;
+			textscreen->m_CenterText = cluster->CenterText;
+			textscreen->m_FadeText = cluster->FadeText;
+			textscreen->m_PlainText = cluster->PlainText;
+			textscreen->m_PlainSync = cluster->PlainSync;
+			textscreen->m_ScrollText = cluster->ScrollText;
+			textscreen->m_ScrollTextSpeed = cluster->ScrollTextSpeed;
+			textscreen->m_ScrollTextDirection = cluster->ScrollTextDirection;
+			textscreen->m_ScrollTextTime = cluster->ScrollTextTime;
+			textscreen->m_RowPadding = cluster->RowPadding;
+			textscreen->m_FontName = cluster->FontName;
+			textscreen->m_WipeOut = cluster->WipeOut;
+			textscreen->m_NoSkip = cluster->NoSkip;
+			textscreen->m_AutoSkip = cluster->AutoSkip;
+			
+
+			if (music != NULL && *music != 0)//[GEC]
+			{
+				if (cluster->NextMusic.GetChars() != NULL && *cluster->NextMusic.GetChars() != 0) 
+				textscreen->mNextMusic = cluster->NextMusic;
+			}
+		}
+		else
+		{
+			textscreen->m_PicResW = 0;
+			textscreen->m_PicResH = 0;
+			textscreen->m_PicX = 0;
+			textscreen->m_PicY = 0;
+			textscreen->m_WipeOut = GS_FINALE;
+		}
+
 		if (textInLump)
 		{
 			int lump = Wads.CheckNumForFullName(text, true);

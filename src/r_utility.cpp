@@ -849,6 +849,9 @@ void R_SetupFrame (AActor *actor)
 	if (camera->player != 0)
 	{
 		player = camera->player;
+
+		// [GEC][d64] - recoil pitch from weapons
+		iview->nviewpitch += camera->recoilpitch;
 	}
 
 	iview->nviewangle = camera->angle;

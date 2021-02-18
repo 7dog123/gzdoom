@@ -40,8 +40,7 @@
 #include "w_wad.h"
 #include "textures/textures.h"
 #include "gl/textures/gl_skyboxtexture.h"
-
-
+#include "v_palette.h"
 
 //-----------------------------------------------------------------------------
 //
@@ -152,25 +151,162 @@ void gl_ParseSkybox(FScanner &sc)
 	FSkyBox * sb = new FSkyBox;
 	sb->Name = sc.String;
 	sb->Name.ToUpper();
+
 	if (sc.CheckString("fliptop"))
 	{
 		sb->fliptop = true;
 	}
-	sc.MustGetStringName("{");
-	while (!sc.CheckString("}"))
+
+	//[GEC]
+	sb->skyconsole = false;
+	sb->flags = 0;
+	sb->basecolor = 0;
+	sb->highcolor = 0;
+	sb->lowcolor = 0;
+
+	if (sc.CheckString("skyconsole"))
 	{
-		sc.MustGetString();
-		if (facecount<6) 
+		sb->skyconsole = true;
+	}
+
+	if(sb->skyconsole != 1)
+	{
+		sc.MustGetStringName("{");
+		while (!sc.CheckString("}"))
 		{
-			sb->faces[facecount] = TexMan[TexMan.GetTexture(sc.String, FTexture::TEX_Wall, FTextureManager::TEXMAN_TryAny|FTextureManager::TEXMAN_Overridable)];
+			sc.MustGetString();
+			if (facecount<6) 
+			{
+				sb->faces[facecount] = TexMan[TexMan.GetTexture(sc.String, FTexture::TEX_Wall, FTextureManager::TEXMAN_TryAny|FTextureManager::TEXMAN_Overridable)];
+			}
+			facecount++;
 		}
-		facecount++;
+		if (facecount != 3 && facecount != 6)
+		{
+			sc.ScriptError("%s: Skybox definition requires either 3 or 6 faces", sb->Name.GetChars());
+		}
+		sb->SetSize();
 	}
-	if (facecount != 3 && facecount != 6)
+	else
 	{
-		sc.ScriptError("%s: Skybox definition requires either 3 or 6 faces", sb->Name.GetChars());
+		sc.MustGetStringName("{");
+		while (!sc.CheckString("}"))
+		{
+			if (sc.CheckString("pic"))
+			{
+				sc.MustGetToken('=');
+
+				sc.MustGetString();
+				sb->faces[0] = TexMan[TexMan.GetTexture(sc.String, FTexture::TEX_Wall, FTextureManager::TEXMAN_TryAny|FTextureManager::TEXMAN_Overridable)];
+			}
+
+			if (sc.CheckString("backpic"))
+			{
+				sc.MustGetToken('=');
+
+				sc.MustGetString();
+				sb->faces[1] = TexMan[TexMan.GetTexture(sc.String, FTexture::TEX_Wall, FTextureManager::TEXMAN_TryAny|FTextureManager::TEXMAN_Overridable)];
+				sb->flags |= SKFS_BACKGROUND;
+			}
+
+			if (sc.CheckString("basecolor"))
+			{
+				sc.MustGetToken('=');
+
+				sc.MustGetNumber();
+				int r = sc.Number;
+				sc.MustGetNumber();
+				int g = sc.Number;
+				sc.MustGetNumber();
+				int b = sc.Number;
+
+				sb->basecolor = MAKERGB(r,g,b);
+			}
+
+			if (sc.CheckString("highcolor"))
+			{
+				sc.MustGetToken('=');
+
+				sc.MustGetNumber();
+				int r = sc.Number;
+				sc.MustGetNumber();
+				int g = sc.Number;
+				sc.MustGetNumber();
+				int b = sc.Number;
+
+				sb->highcolor = MAKERGB(r,g,b);
+			}
+
+			if (sc.CheckString("lowcolor"))
+			{
+				sc.MustGetToken('=');
+
+				sc.MustGetNumber();
+				int r = sc.Number;
+				sc.MustGetNumber();
+				int g = sc.Number;
+				sc.MustGetNumber();
+				int b = sc.Number;
+
+				sb->lowcolor = MAKERGB(r,g,b);
+			}
+
+			if (sc.CheckString("cloud"))
+			{
+				sb->flags |= SKFS_CLOUD;
+			}
+
+			if (sc.CheckString("thunder"))
+			{
+				sb->flags |= SKFS_THUNDER;
+			}
+
+			if (sc.CheckString("fire"))
+			{
+				sb->faces[0] = sb->faces[1] = TexMan[TexMan.GetTexture(/*"-noflat-"*/sb->Name, FTexture::TEX_Wall, FTextureManager::TEXMAN_TryAny|FTextureManager::TEXMAN_Overridable)];
+				sb->flags |= SKFS_FIRE;
+			}
+
+			if (sc.CheckString("void"))
+			{
+				sb->faces[0] = sb->faces[1] = TexMan[TexMan.GetTexture(/*"-noflat-"*/sb->Name, FTexture::TEX_Wall, FTextureManager::TEXMAN_TryAny|FTextureManager::TEXMAN_Overridable)];
+				sb->flags |= SKFS_VOID;
+			}
+
+			if (sc.CheckString("fadeinbackground"))
+			{
+				sb->flags |= SKFS_FADEBACK;
+			}
+
+			if (sc.CheckString("skypsx"))
+			{
+				sb->flags |= SKFS_SKYPSX;
+			}
+
+			if (sc.CheckString("raisingfire"))
+			{
+				sb->flags |= SKFS_RAISINGFIRE;
+			}
+
+			if (sc.CheckString("firepsx"))
+			{
+				sb->faces[0] = sb->faces[1] = TexMan[TexMan.GetTexture(/*"-noflat-"*/sb->Name, FTexture::TEX_Wall, FTextureManager::TEXMAN_TryAny|FTextureManager::TEXMAN_Overridable)];
+				sb->flags |= SKFS_FIREPSX;
+			}
+
+			if (sc.CheckString("firepsx_grey"))
+			{
+				sb->flags |= SKFS_FIREPSX_GREY;
+			}
+
+			if (sc.CheckString("ajusttopoffset"))
+			{
+				sb->flags |= SKFS_AJUSTTOPOFFSET;
+			}
+		}
+		sb->SetSize();
 	}
-	sb->SetSize();
+
 	TexMan.AddTexture(sb);
 }
 
@@ -207,7 +343,7 @@ void gl_ParseVavoomSkybox()
 				maplump = Wads.CheckNumForFullName(sc.String, true);
 
 				FTexture *tex = TexMan.FindTexture(sc.String, FTexture::TEX_Wall, FTextureManager::TEXMAN_TryAny);
-				if (tex != NULL)
+				if (tex == NULL)
 				{
 					Printf("Texture '%s' not found in Vavoom skybox '%s'\n", sc.String, sb->Name.GetChars());
 				}

@@ -215,6 +215,12 @@ ACTOR PowerLightAmp : Powerup native
 
 ACTOR PowerTorch : PowerLightAmp native {}
 
+//[GEC]
+ACTOR PowerD64LightAmp : Powerup native
+{
+	Powerup.Duration -120
+}
+
 ACTOR PowerFlight : Powerup native
 {
 	Powerup.Duration -60

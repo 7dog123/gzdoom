@@ -81,6 +81,8 @@
 
 #include "g_shared/a_pickups.h"
 
+#include "r_data/colormaps.h"//[GEC]
+
 extern FILE *Logfile;
 
 FRandom pr_acs ("ACS");
@@ -4520,9 +4522,56 @@ enum EACSFunctions
 	-106 : KickFromGame(2),
 	*/
 
+	// [GEC] News
+	ACSF_ExecuteLine	= 500,
+	ACSF_LineCopy		= 501,
+	ACSF_SectorCopy		= 502,
+	ACSF_Thing_Dissolve	= 503,
+	ACSF_LineSetAgrs	= 504,
+	ACSF_Camera_MoveAndAim	= 505,
+	ACSF_DisplaySkyLogo	= 506,
+
 	// ZDaemon
 	ACSF_GetTeamScore = 19620,	// (int team)
 	ACSF_SetTeamScore,			// (int team, int value)
+};
+
+// GZDoom [GEC] News
+
+// ExecuteLine(tid,mode);
+enum EL_MODES
+{
+	EL_NORMAL = 0,
+	EL_RANDOM = 1
+};
+
+//LineCopy(tag_src, tag_dest, mode);
+//Modes
+enum LC_MODES
+{
+	LC_FLAGS	= 0,
+	LC_TEXTURES = 1,
+	LC_SPECIAL	= 2
+};
+
+//SectorCopy(tag_src, tag_dest, mode, flags);
+//Modes
+enum SC_MODES
+{
+	SC_LIGHTS	= 0,
+	SC_FLATS	= 1,
+	SC_SPECIAL	= 2,
+	SC_FLAGS	= 3,
+	SC_LIGHTS_INTERPOLATE	= 4,
+};
+//Flags
+enum SCF_FLAGS
+{
+	SCF_NOCOPYFLOORCOLOR		= 1,
+	SCF_NOCOPYCEILINGCOLOR		= 2,
+	SCF_NOCOPYWALLTOPCOLOR		= 4,
+	SCF_NOCOPYWALLBOTTOMCOLOR	= 8,
+	SCF_NOCOPYSPRITESCOLOR		= 16,
 };
 
 int DLevelScript::SideFromID(int id, int side)
@@ -4901,7 +4950,7 @@ static int SwapActorTeleFog(AActor *activator, int tid)
 	return count;
 }
 
-
+#include "gl/scene/gl_skynew.h"//[GEC]
 
 int DLevelScript::CallFunction(int argCount, int funcIndex, SDWORD *args)
 {
@@ -6061,7 +6110,408 @@ doplaysound:			if (funcIndex == ACSF_PlayActorSound)
 				P_SpawnParticle(x, y, z, xvel, yvel, zvel, color, fullbright, startalpha, lifetime, size, fadestep, accelx, accely, accelz);
 		}
 		break;
-		
+
+		case ACSF_ExecuteLine://[GEC]
+		{
+			if (argCount > 0)
+			{
+				int line;
+
+				if(args[1] == EL_NORMAL)//normal
+				{
+					line = P_FindFirstLineFromID(args[0]);
+					if(line >= 0)
+					{
+						if(players[consoleplayer].mo)
+							P_ActivateLine(&lines[line],players[consoleplayer].mo, false, lines[line].activation);
+					}
+				}
+				else if(args[1] == EL_RANDOM)//random
+				{
+					line_t** randLine = NULL;
+					line_t** linelist = NULL;
+					int count = 0;
+					int rand = 0;
+
+					FLineIdIterator itr(args[0]);
+
+					while ((line = itr.Next()) >= 0)
+					{
+						if(lines[line].special != activationline->special)
+							count++;
+						else if(lines[line].args != activationline->args)//[GEC] Para Scripts
+							count++;
+					}
+
+					//Printf("Count %d\n",count);
+					if(!count) {return false;}
+
+					linelist = (line_t **)M_Malloc(count*sizeof(line_t *));
+					randLine = linelist;
+
+					FLineIdIterator itr2(args[0]);
+					while ((line = itr2.Next()) >= 0)
+					{
+						if(lines[line].special != activationline->special)
+							*randLine++ = &lines[line];
+						else if(lines[line].args != activationline->args)//[GEC] Para Scripts
+							*randLine++ = &lines[line];
+							//Printf("lines %d special %d args %d\n",line,lines[line].special,lines[line].args[0]);
+					}
+
+					rand = (pr_acs() % count);
+
+					if(players[consoleplayer].mo)
+						P_ActivateLine(linelist[rand],players[consoleplayer].mo, false, linelist[rand]->activation);
+
+					M_Free(linelist);
+				}
+
+				//else {}//Printf("no enter\n");
+			}
+		}
+		break;
+
+		case ACSF_LineCopy://[GEC]
+		{
+			if (argCount > 0)
+			{
+				DWORD	LineFlags;
+				int i;
+				int destline;
+				int srcline  = P_FindFirstLineFromID(args[1]);
+				if(srcline == -1)
+				{
+					return 0;
+				}
+				/*register int s;
+				fixed_t dx;	// direction and speed of scrolling
+				fixed_t dy;
+				int accel = 0;		// no control sector or acceleration*/
+
+				FLineIdIterator itr(args[0]);
+				while ((destline = itr.Next()) >= 0)
+				{
+					line_t *line = &lines[destline];
+
+					if (args[2] == LC_FLAGS)//copy flags
+					{
+						line->gecflags = lines[srcline].gecflags;
+
+						LineFlags = line->flags;//[GEC] Copy previus flags
+
+						if(line->flags & ML_TWOSIDED)
+						{
+							line->flags = (lines[srcline].flags | ML_TWOSIDED);
+						}
+						else
+						{
+							line->flags = lines[srcline].flags;
+							line->flags &= ~ML_TWOSIDED;
+						}
+
+						if(LineFlags & ML_REPEAT_SPECIAL) {line->flags |= ML_REPEAT_SPECIAL;}//[GEC] Set again
+						else {line->flags &= ~ML_REPEAT_SPECIAL;}
+
+						/*if(line->gecflags & (ML_SCROLL_WALL_RIGHT|ML_SCROLL_WALL_LEFT|ML_SCROLL_WALL_UP|ML_SCROLL_WALL_DOWN))
+						{
+							int spd_lft = (line->gecflags & ML_SCROLL_WALL_LEFT) ? 64 : 0;
+							int spd_rgt = (line->gecflags & ML_SCROLL_WALL_RIGHT) ? 64 : 0;
+							int spd_up  = (line->gecflags & ML_SCROLL_WALL_UP) ? 64 : 0;
+							int spd_dwn = (line->gecflags & ML_SCROLL_WALL_DOWN) ? 64 : 0;
+
+							s = int(line->sidedef[0] - sides);
+
+							dx = (spd_lft - spd_rgt) * (FRACUNIT/64);
+							dy = (spd_up - spd_dwn) * (FRACUNIT/64);
+							new DScroller (DScroller::sc_side, dx, dy, -1, s, accel);
+						}*/
+					}
+					else if (args[2] == LC_TEXTURES)//copy textures
+					{
+						//line->sidedef[0] = lines[srcline].sidedef[0];
+						line->sidedef[0]->SetTexture(side_t::top,lines[srcline].sidedef[0]->GetTexture(side_t::top));
+						line->sidedef[0]->SetTexture(side_t::mid,lines[srcline].sidedef[0]->GetTexture(side_t::mid));
+						line->sidedef[0]->SetTexture(side_t::bottom,lines[srcline].sidedef[0]->GetTexture(side_t::bottom));
+
+						if(line->flags & ML_TWOSIDED || (line->sidedef[1] != NULL))
+						{
+							line->sidedef[1]->SetTexture(side_t::top,lines[srcline].sidedef[1]->GetTexture(side_t::top));
+							line->sidedef[1]->SetTexture(side_t::mid,lines[srcline].sidedef[1]->GetTexture(side_t::mid));
+							line->sidedef[1]->SetTexture(side_t::bottom,lines[srcline].sidedef[1]->GetTexture(side_t::bottom));
+						}
+
+						if(line->gecflags & ML_SWITCHX02 && !line->sidedef[0]->GetTexture(side_t::top).Exists())
+						{
+							line->gecflags &= ~ML_SWITCHX02;
+						}
+
+						if(line->gecflags & (ML_SWITCHX04 | ML_SWITCHX08) && !line->sidedef[0]->GetTexture(side_t::bottom).Exists())
+						{
+							line->gecflags &= ~(ML_SWITCHX04 | ML_SWITCHX08);
+						}
+
+						if(line->gecflags & (ML_SWITCHX02 | ML_SWITCHX04) && !line->sidedef[0]->GetTexture(side_t::mid).Exists())
+						{
+							line->gecflags &= ~(ML_SWITCHX02 | ML_SWITCHX04);
+						}
+
+						if(line->gecflags & (ML_SWITCHX02 | ML_SWITCHX08) && !line->sidedef[0]->GetTexture(side_t::top).Exists())
+						{
+							line->gecflags &= ~(ML_SWITCHX02 | ML_SWITCHX08);
+						}
+					}
+					else if (args[2] == LC_SPECIAL)//copy special
+					{
+						line->activation = lines[srcline].activation;
+						if(lines[srcline].flags & ML_REPEAT_SPECIAL) {line->flags |= ML_REPEAT_SPECIAL;}
+						else {line->flags &= ~ML_REPEAT_SPECIAL;}
+
+						//Set New Special
+						line->special = lines[srcline].special;
+						line->locknumber = lines[srcline].locknumber;
+
+						//Set New Args
+						for(i = 0; i <= 4; i++)
+						{
+							line->args[i] = lines[srcline].args[i];
+						}
+					}
+				}
+			}
+		}
+		break;
+
+		case ACSF_SectorCopy://[GEC]
+		{
+			if (argCount > 0)
+			{
+				//Printf("SectorCopy\n");
+				int j = 0;
+				sector_t* sec1;
+				sector_t* sec2;
+
+				short newspecial = 0;
+				int destsector;
+				int srcsector = P_FindFirstSectorFromTag (args[1]);
+				if(srcsector == -1)
+				{
+					return 0;
+				}
+				sec2 = &sectors[srcsector];
+    
+				//srcsector = -1;
+				destsector = -1;
+				
+				FSectorTagIterator it(args[0]);
+				while ((destsector = it.Next()) >= 0)
+				{
+					sec1 = &sectors[destsector];
+					//case mods_lights:
+					if (args[2] == SC_LIGHTS)//copy lights
+					{
+						//sec1->ColorMap = sec2->ColorMap;
+						if(!(args[3] & SCF_NOCOPYFLOORCOLOR)){
+							sec1->SpecialColors[sector_t::floor] = sec2->SpecialColors[sector_t::floor];
+							sec1->SpecialColorsBase[sector_t::floor] = sec2->SpecialColorsBase[sector_t::floor];
+						}
+						if(!(args[3] & SCF_NOCOPYCEILINGCOLOR)){
+							sec1->SpecialColors[sector_t::ceiling] = sec2->SpecialColors[sector_t::ceiling];
+							sec1->SpecialColorsBase[sector_t::ceiling] = sec2->SpecialColorsBase[sector_t::ceiling];
+						}
+						if(!(args[3] & SCF_NOCOPYWALLTOPCOLOR)){
+							sec1->SpecialColors[sector_t::walltop] = sec2->SpecialColors[sector_t::walltop];
+							sec1->SpecialColorsBase[sector_t::walltop] = sec2->SpecialColorsBase[sector_t::walltop];
+						}
+						if(!(args[3] & SCF_NOCOPYWALLBOTTOMCOLOR)){
+							sec1->SpecialColors[sector_t::wallbottom] = sec2->SpecialColors[sector_t::wallbottom];
+							sec1->SpecialColorsBase[sector_t::wallbottom] = sec2->SpecialColorsBase[sector_t::wallbottom];
+						}
+						if(!(args[3] & SCF_NOCOPYSPRITESCOLOR)){
+							sec1->SpecialColors[sector_t::sprites] = sec2->SpecialColors[sector_t::sprites];
+							sec1->SpecialColorsBase[sector_t::sprites] = sec2->SpecialColorsBase[sector_t::sprites];
+						}
+					}
+					//case mods_flats:
+					else if (args[2] == SC_FLATS)//copy flats
+					{
+						sec1->SetTexture(sector_t::ceiling, sec2->GetTexture(sector_t::ceiling));
+						sec1->SetTexture(sector_t::floor, sec2->GetTexture(sector_t::floor));
+					}
+					//case mods_special:
+					else if (args[2] == SC_SPECIAL)//copy special
+					{
+						/*TThinkerIterator<DLighting> iterator;
+						DLighting *effect;
+
+						while ((effect = iterator.Next()) != NULL)
+						{
+							if (tagManager.SectorHasTag(effect->GetSector(), args[0]))
+							{
+								effect->Destroy();
+							}
+						}*/
+
+						if (sec1->lightingdata)
+							continue;
+							
+						sec1->special = sec2->cpyspecial;
+						sec1->special &= 0xff;
+						P_InitSectorSpecial(sec1, sec1->special, false);
+					}
+					//case mods_flags:
+					else if (args[2] == SC_FLAGS)//copy flags
+					{
+						//Printf("SectorCopyflags\n");
+						//copy damage, secret, scroll, echo?,liquit?,hidemap;
+						sec1->Flags = sec2->Flags;
+						sec1->MoreFlags = sec2->MoreFlags;
+						sec1->TransferSpecial(sec2);
+
+						if (sec1->Flags & (SECF_SECRET))
+						{
+							level.total_secrets++;
+						}
+
+						sec1->EnvironmentSector = sec2->EnvironmentSector;
+
+						//[GEC] Sector Scroll Con Flags
+						{
+							int spd_lft = (sec1->Flags & SECF_SCROLLLEFT) ? 1 : 0;
+							int spd_rgt = (sec1->Flags & SECF_SCROLLRIGHT) ? 1 : 0;
+							int spd_up  = (sec1->Flags & SECF_SCROLLUP) ? 1 : 0;
+							int spd_dwn = (sec1->Flags & SECF_SCROLLDOWN) ? 1 : 0;
+
+							fixed_t speed, cspeed;
+
+							if(sec1->Flags & SECF_SCROLLFAST)
+							{
+								speed = 3*FRACUNIT;
+								cspeed = 3*0xC000;
+							}
+							else
+							{
+								speed = FRACUNIT;
+								cspeed = 0xC000;
+							}
+
+							fixed_t dx = (spd_lft - spd_rgt) * (speed);
+							fixed_t dy = (spd_up - spd_dwn) * (speed);
+
+							fixed_t cdx = (spd_lft - spd_rgt) * (cspeed);
+							fixed_t cdy = (spd_up - spd_dwn) * (cspeed);
+
+							if(sec1->Flags & SECF_SCROLLCEILING)
+							{
+								CopyScroller (args[0], DScroller::sc_ceiling, dx, dy);
+							}
+
+							if(sec1->Flags & SECF_SCROLLFLOOR)
+							{
+								CopyScroller (args[0], DScroller::sc_floor, dx, dy);
+								CopyScroller (args[0], DScroller::sc_carry,-cdx,cdy);
+							}
+						}
+					}
+
+					else if (args[2] == SC_LIGHTS_INTERPOLATE)//copy lights interpolate
+					{
+						PalEntry destcolor, srccolor, destcolorbase;
+
+						/*destcolor = destcolorbase = sec1->ColorMap->Color;
+						srccolor = sec2->ColorMap->Color;
+
+						new DLightMorph (sec1, destcolor, srccolor, destcolorbase, -1);*/
+
+						if(!(args[3] & SCF_NOCOPYFLOORCOLOR))
+						{
+							destcolor = destcolorbase = sec1->SpecialColorsBase[sector_t::floor];
+							srccolor = sec2->SpecialColorsBase[sector_t::floor];
+							new DLightMorph (sec1, destcolor, srccolor, destcolorbase, sector_t::floor);
+						}
+						if(!(args[3] & SCF_NOCOPYCEILINGCOLOR))
+						{
+							destcolor = destcolorbase = sec1->SpecialColorsBase[sector_t::ceiling];
+							srccolor = sec2->SpecialColorsBase[sector_t::ceiling];
+							new DLightMorph (sec1, destcolor, srccolor, destcolorbase, sector_t::ceiling);
+						}
+						if(!(args[3] & SCF_NOCOPYWALLTOPCOLOR))
+						{
+							destcolor = destcolorbase = sec1->SpecialColorsBase[sector_t::walltop];
+							srccolor = sec2->SpecialColorsBase[sector_t::walltop];
+							new DLightMorph (sec1, destcolor, srccolor, destcolorbase, sector_t::walltop);
+						}
+						if(!(args[3] & SCF_NOCOPYWALLBOTTOMCOLOR))
+						{
+							destcolor = destcolorbase = sec1->SpecialColorsBase[sector_t::wallbottom];
+							srccolor = sec2->SpecialColorsBase[sector_t::wallbottom];
+							new DLightMorph (sec1, destcolor, srccolor, destcolorbase, sector_t::wallbottom);
+						}
+						if(!(args[3] & SCF_NOCOPYSPRITESCOLOR))
+						{
+							destcolor = destcolorbase = sec1->SpecialColorsBase[sector_t::sprites];
+							srccolor = sec2->SpecialColorsBase[sector_t::sprites];
+							new DLightMorph (sec1, destcolor, srccolor, destcolorbase, sector_t::sprites);
+						}
+						/*for(j = 0; j <= 5; j++)
+						{
+							destcolorbase = sec1->SpecialColorsBase[j];
+							destcolor = sec1->SpecialColorsBase[j];
+							srccolor = sec2->SpecialColorsBase[j];
+
+							new DLightMorph (sec1, destcolor, srccolor, destcolorbase, j);
+						}*/
+					}
+				}
+			}
+		}
+		break;
+
+		case ACSF_Thing_Dissolve://[GEC]
+		{
+			float SpeedFade = 0.031373;	// Equivale a 8
+			FActorIterator it(args[0]);
+			AActor *spot;
+
+			while ((spot = it.Next()) != NULL)
+			//while ((spot = it.Next()) >= 0)
+			{
+				spot->RenderStyle.Flags &= ~STYLEF_Alpha1;
+				new P_FadeMobj(spot, -FLOAT2FIXED(SpeedFade), 0, 0, true, true);
+			}
+		}
+		break;
+
+		case ACSF_LineSetAgrs://[GEC]
+		{
+			int destline;
+			int linetag = args[0];
+			int argpos = args[1];
+			int newvalue = args[2];
+
+			FLineIdIterator itr(linetag);
+			while ((destline = itr.Next()) >= 0)
+			{
+				line_t *line = &lines[destline];
+
+				line->args[argpos] = newvalue;
+			}
+		}
+		break;
+
+		case ACSF_Camera_MoveAndAim://[GEC]
+		{
+			new P_SetMovingCamera(args[0]);
+		}
+		break;
+
+		case ACSF_DisplaySkyLogo://[GEC]
+		{
+			// D64 Map33 Logo
+			skyfadeback = true;
+		}
+		break;
+
 		default:
 			break;
 	}

@@ -60,6 +60,7 @@
 #include "gl/shaders/gl_shader.h"
 #include "gl/textures/gl_material.h"
 #include "gl/utility/gl_clock.h"
+#include "gl/textures/gl_combiners.h"//[GEC]
 
 CVAR(Bool, gl_usecolorblending, true, CVAR_ARCHIVE|CVAR_GLOBALCONFIG)
 CVAR(Bool, gl_spritebrightfog, false, CVAR_ARCHIVE|CVAR_GLOBALCONFIG);
@@ -101,6 +102,10 @@ void gl_SetRenderStyle(FRenderStyle style, bool drawopaque, bool allowcolorblend
 	gl_RenderState.SetTextureMode(tm);
 }
 
+//[GEC]
+#define dcos(angle) finecosine[(angle) >> ANGLETOFINESHIFT]
+#define dsin(angle) finesine[(angle) >> ANGLETOFINESHIFT]
+
 CVAR(Bool, gl_nolayer, false, 0)
 
 //==========================================================================
@@ -121,6 +126,11 @@ void GLSprite::Draw(int pass)
 	bool additivefog = false;
 	bool foglayer = false;
 	int rel = getExtraLight();
+
+	int texturemode;//[GEC]
+	float DynCol[3] = {0.0, 0.0, 0.0};//[GEC]
+	float FragCol[4] = {1.0, 1.0, 1.0, 1.0};//[GEC]
+	gl_RenderState.ResetSpecials();//[GEC]
 
 	if (pass==GLPASS_TRANSLUCENT)
 	{
@@ -242,7 +252,22 @@ void GLSprite::Draw(int pass)
 		gl_RenderState.SetFog(0, 0);
 	}
 
-	if (gltexture) gltexture->BindPatch(Colormap.colormap, translation, OverrideShader);
+	if (actor)//[GEC]
+	{
+		lightlevel64 = actor->Sector->lightlevel_64;
+	}
+
+	//[GEC]
+	gl_RenderState.GetTextureMode(&texturemode);//Get TextureMode
+	gl_RenderState.GetFragColor(&FragCol[0], &FragCol[1], &FragCol[2], &FragCol[3]);//Get FragColor
+	gl_RenderState.GetDynLight(&DynCol[0], &DynCol[1], &DynCol[2]);	//Get DynLight Color
+	SetInitSpecials(texturemode, glset.lightmode, lightlevel, 0, lightlevel64, fullbright, FragCol, DynCol);
+
+	if (gltexture)
+	{
+		gltexture->BindPatch(Colormap.colormap, translation, OverrideShader);
+		SetNewSpecials(gltexture, Colormap.colormap, true, false);//[GEC]
+	}
 	else if (!modelframe) gl_RenderState.EnableTexture(false);
 
 	if (!modelframe)
@@ -258,60 +283,35 @@ void GLSprite::Draw(int pass)
 		Vector v3;
 		Vector v4;
 
-		if (drawWithXYBillboard)
+		if (!RenderLaser)//[GEC]
 		{
-			// Rotate the sprite about the vector starting at the center of the sprite
-			// triangle strip and with direction orthogonal to where the player is looking
-			// in the x/y plane.
-			float xcenter = (x1 + x2)*0.5;
-			float ycenter = (y1 + y2)*0.5;
-			float zcenter = (z1 + z2)*0.5;
-			float angleRad = DEG2RAD(270. - float(GLRenderer->mAngles.Yaw));
+			if (drawWithXYBillboard)
+			{
+				// Rotate the sprite about the vector starting at the center of the sprite
+				// triangle strip and with direction orthogonal to where the player is looking
+				// in the x/y plane.
+				float xcenter = (x1 + x2)*0.5;
+				float ycenter = (y1 + y2)*0.5;
+				float zcenter = (z1 + z2)*0.5;
+				float angleRad = DEG2RAD(270. - float(GLRenderer->mAngles.Yaw));
 
-			Matrix3x4 mat;
-			mat.MakeIdentity();
-			mat.Translate(xcenter, zcenter, ycenter);
-			mat.Rotate(-sin(angleRad), 0, cos(angleRad), -GLRenderer->mAngles.Pitch);
-			mat.Translate(-xcenter, -zcenter, -ycenter);
-			v1 = mat * Vector(x1, z1, y1);
-			v2 = mat * Vector(x2, z1, y2);
-			v3 = mat * Vector(x1, z2, y1);
-			v4 = mat * Vector(x2, z2, y2);
-		}
-		else
-		{
-			v1 = Vector(x1, z1, y1);
-			v2 = Vector(x2, z1, y2);
-			v3 = Vector(x1, z2, y1);
-			v4 = Vector(x2, z2, y2);
-		}
-
-		glBegin(GL_TRIANGLE_STRIP);
-		if (gltexture)
-		{
-			glTexCoord2f(ul, vt); glVertex3fv(&v1[0]);
-			glTexCoord2f(ur, vt); glVertex3fv(&v2[0]);
-			glTexCoord2f(ul, vb); glVertex3fv(&v3[0]);
-			glTexCoord2f(ur, vb); glVertex3fv(&v4[0]);
-		}
-		else	// Particle
-		{
-			glVertex3fv(&v1[0]);
-			glVertex3fv(&v2[0]);
-			glVertex3fv(&v3[0]);
-			glVertex3fv(&v4[0]);
-		}
-
-		glEnd();
-
-		if (foglayer)
-		{
-			// If we get here we know that we have colored fog and no fixed colormap.
-			gl_SetFog(foglevel, rel, &Colormap, additivefog);
-			gl_RenderState.SetFixedColormap(CM_FOGLAYER);
-			gl_RenderState.BlendEquation(GL_FUNC_ADD);
-			gl_RenderState.BlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-			gl_RenderState.Apply();
+				Matrix3x4 mat;
+				mat.MakeIdentity();
+				mat.Translate(xcenter, zcenter, ycenter);
+				mat.Rotate(-sin(angleRad), 0, cos(angleRad), -GLRenderer->mAngles.Pitch);
+				mat.Translate(-xcenter, -zcenter, -ycenter);
+				v1 = mat * Vector(x1, z1, y1);
+				v2 = mat * Vector(x2, z1, y2);
+				v3 = mat * Vector(x1, z2, y1);
+				v4 = mat * Vector(x2, z2, y2);
+			}
+			else
+			{
+				v1 = Vector(x1, z1, y1);
+				v2 = Vector(x2, z1, y2);
+				v3 = Vector(x1, z2, y1);
+				v4 = Vector(x2, z2, y2);
+			}
 
 			glBegin(GL_TRIANGLE_STRIP);
 			if (gltexture)
@@ -328,13 +328,95 @@ void GLSprite::Draw(int pass)
 				glVertex3fv(&v3[0]);
 				glVertex3fv(&v4[0]);
 			}
+
 			glEnd();
 
+			if (foglayer)
+			{
+				// If we get here we know that we have colored fog and no fixed colormap.
+				gl_SetFog(foglevel, rel, &Colormap, additivefog);
+				gl_RenderState.SetFixedColormap(CM_FOGLAYER);
+				gl_RenderState.BlendEquation(GL_FUNC_ADD);
+				gl_RenderState.BlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+				gl_RenderState.Apply();
+
+				glBegin(GL_TRIANGLE_STRIP);
+				if (gltexture)
+				{
+					glTexCoord2f(ul, vt); glVertex3fv(&v1[0]);
+					glTexCoord2f(ur, vt); glVertex3fv(&v2[0]);
+					glTexCoord2f(ul, vb); glVertex3fv(&v3[0]);
+					glTexCoord2f(ur, vb); glVertex3fv(&v4[0]);
+				}
+				else	// Particle
+				{
+					glVertex3fv(&v1[0]);
+					glVertex3fv(&v2[0]);
+					glVertex3fv(&v3[0]);
+					glVertex3fv(&v4[0]);
+				}
+				glEnd();
+
+			}
 		}
+		//[GEC] Esto solo es para el laser
+		if (RenderLaser)
+		{
+			float	x, y, z;
+			float	dx1, dx2;
+			float	s, c;
+
+			// setup texture mapping
+			ul = vb = 0;
+			ur = vt = 1;
+
+			// get angles
+			s = FIXED2FLOAT(dsin(LaserAngle + ANG90))*2;
+			c = FIXED2FLOAT(dcos(LaserAngle + ANG90))*2;
+
+			// setup vertex coordinates
+
+			// start of laser
+			x = (x1);
+			y = (y1);
+			z = (z1);
+
+			dx1 = -(float)(gltexture->GetScaledTopOffsetFloat(GLUSE_SPRITE));
+			dx2 = dx1 + (float)gltexture->GetScaledHeightFloat(GLUSE_SPRITE);
+
+			FVector3 v[4];
+			v[0] = FVector3(x + (c * dx1), z, y + (s * dx1));
+			v[2] = FVector3(x + (c * dx2), z, y + (s * dx2));
+
+			// end of laser
+			x = (x2);
+			y = (y2);
+			z = (z2);
+
+			v[1] = FVector3(x + (c * dx1), z, y + (s * dx1));
+			v[3] = FVector3(x + (c * dx2), z, y + (s * dx2));
+
+			glDepthMask(true);
+			glBegin(GL_TRIANGLE_STRIP);
+			glTexCoord2f(ul, vt); glVertex3f(v[0][0], v[0][1], v[0][2]);
+			glTexCoord2f(ul, vt); glVertex3f(v[1][0], v[1][1], v[1][2]);
+			glTexCoord2f(ur, vb); glVertex3f(v[2][0], v[2][1], v[2][2]);
+			glTexCoord2f(ur, vb); glVertex3f(v[3][0], v[3][1], v[3][2]);
+			glEnd();
+			glDepthMask(false);
+		}
+
+		//[GEC] Reset default
+		Disable_texunits();
+		gl_RenderState.SetTextureMode(texturemode);
 	}
 	else
 	{
 		gl_RenderModel(this, Colormap.colormap);
+
+		//[GEC] Reset default
+		Disable_texunits();
+		gl_RenderState.SetTextureMode(texturemode);
 	}
 
 	if (pass==GLPASS_TRANSLUCENT)
@@ -588,6 +670,8 @@ void GLSprite::PerformSpriteClipAdjustment(AActor *thing, fixed_t thingx, fixed_
 
 void GLSprite::Process(AActor* thing,sector_t * sector)
 {
+	gl_RenderState.ResetSpecials();//[GEC]
+
 	sector_t rs;
 	sector_t * rendersector;
 	// don't draw the thing that's used as camera (for viewshifts during quakes!)
@@ -745,6 +829,21 @@ void GLSprite::Process(AActor* thing,sector_t * sector)
 
 	depth = DMulScale20 (thingpos.x-viewx, viewtancos, thingpos.y-viewy, viewtansin);
 
+	RenderLaser = false;
+	//[GEC] Esto solo es para el laser
+	if(thing->RenderLaser)
+	{
+		RenderLaser = true;
+		LaserAngle = thing->LaserAngle;
+
+		x1 = thing->LaserStart.X;
+		x2 = thing->LaserEnd.X;
+		y1 = thing->LaserStart.Y;
+		y2 = thing->LaserEnd.Y;
+		z1 = thing->LaserStart.Z;
+		z2 = thing->LaserEnd.Z;
+	}
+
 	// light calculation
 
 	bool enhancedvision=false;
@@ -783,6 +882,8 @@ void GLSprite::Process(AActor* thing,sector_t * sector)
 	else 
 	{
 		Colormap=rendersector->ColorMap;
+		Colormap.LightColorMul(rendersector->SpecialColors[sector_t::sprites]);//[GEC]
+
 		if (fullbright)
 		{
 			if (rendersector == &sectors[rendersector->sectornum] || in_area != area_below)	
@@ -935,6 +1036,9 @@ void GLSprite::Process(AActor* thing,sector_t * sector)
 
 void GLSprite::ProcessParticle (particle_t *particle, sector_t *sector)//, int shade, int fakeside)
 {
+	RenderLaser = false; //[GEC]
+	gl_RenderState.ResetSpecials();//[GEC]
+
 	if (GLRenderer->mCurrentPortal)
 	{
 		int clipres = GLRenderer->mCurrentPortal->ClipPoint(particle->x, particle->y);
@@ -948,6 +1052,8 @@ void GLSprite::ProcessParticle (particle_t *particle, sector_t *sector)//, int s
 	lightlevel = gl_ClampLight(sector->GetTexture(sector_t::ceiling) == skyflatnum ? 
 		sector->GetCeilingLight() : sector->GetFloorLight());
 	foglevel = sector->lightlevel;
+
+	lightlevel64 = sector->lightlevel_64;//[GEC]
 
 	if (gl_fixedcolormap) 
 	{

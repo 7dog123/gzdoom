@@ -172,7 +172,29 @@ typedef enum {
 	Carry_West10,
 	Carry_West25,
 	Carry_West30,
-	Carry_West35
+	Carry_West35,
+
+	//New Lights // [GEC]
+	//DOOM 64
+	dLight_64Flicker			= 125,	// 1 = Light Blinks (randomly)
+	dLight_64StrobeFast			= 126,	// 2 = Light Blinks (0.5 sec)
+	dLight_64StrobeSlow			= 127,	// 3 = Light Blinks (1 sec)
+	dLight_64GlowNormal			= 128,	// 8 = Light Glows (1+ sec)
+	dLight_64GlowSlow			= 129,	// 9 = Very Slow Pulse
+	dLight_64GlowRandom			= 130,	// 11 = Very Slow Pulse??
+	dLight_64FireFlicker		= 131,	// 17 = Light Flickers (randomly)
+	dLight_64StrobeAltFlash_A	= 132,	// 202 = Sequence Normal
+	dLight_64StrobeFlash_A		= 133,	// 204 = Fast Flickering
+	dLight_64SequenceLight		= 134,	// 205 = Sequence Starter
+	dLight_64StrobeFlash_B		= 135,	// 206 = Sequence Very Slow
+	dLight_64StrobeAltFlash_B	= 136,	// 208 = Fast Bright Flicker (1.5 Seconds)
+	//PSX DOOM
+	dLight_PsxFireFlicker		= 137, // 1	= Light Flicker
+	dLight_PsxGlowLower			= 138, // 8   = Light Glow Lower
+	dLight_PsxGlowLower_10		= 139, // 200 = Light Glow Lower To 8
+	dLight_PsxGlowUpper_255		= 140, // 201 = Light Glow Upper To 255
+	dLight_PsxStrobeTurbo		= 141, // 202 = Light Blinks Turbo
+	dLight_PsxStrobeFast		= 142, // 204 = Light Blinks Fast
 
 } sectorspecial_t;
 
@@ -217,5 +239,8 @@ int P_ExecuteSpecial(int			num,
 					 int			arg3,
 					 int			arg4,
 					 int			arg5);
+
+#include "p_local.h"
+void CopyScroller (int tag, DScroller::EScrollType type, fixed_t dx, fixed_t dy);//[GEC] global
 
 #endif //__P_LNSPEC_H__

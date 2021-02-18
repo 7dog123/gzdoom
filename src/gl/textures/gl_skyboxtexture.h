@@ -7,12 +7,39 @@
 //
 //-----------------------------------------------------------------------------
 
+//
+// [kex] sky definitions //NEW for [GEC]
+//
+enum 
+{
+    SKFS_CLOUD			= 0x001,
+    SKFS_THUNDER		= 0x002,
+    SKFS_FIRE			= 0x004,
+    SKFS_BACKGROUND		= 0x008,
+    SKFS_FADEBACK		= 0x010,
+    SKFS_VOID			= 0x020,
+	SKFS_SKYPSX			= 0x040, //NEW for [GEC]
+	SKFS_FIREPSX		= 0x080, //NEW for [GEC]
+	SKFS_RAISINGFIRE	= 0x100, //NEW for [GEC]
+	SKFS_FIREPSX_GREY	= 0x200, //NEW for [GEC]
+	SKFS_AJUSTTOPOFFSET	= 0x400, //NEW for [GEC]
+};
+
 class FSkyBox : public FTexture
 {
 public:
 
 	FTexture * faces[6];
 	bool fliptop;
+
+	// D64 & DPSX sky styles [GEC]
+	//{
+	bool skyconsole;
+	int  flags;
+	int basecolor;
+	int highcolor;
+	int lowcolor;
+	//}
 
 	FSkyBox();
 	~FSkyBox();

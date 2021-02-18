@@ -27,6 +27,7 @@ enum PA_Flags
 	PAF_NOSKULLATTACK = 1,
 	PAF_AIMFACING = 2,
 	PAF_NOTARGET = 4,
+	PAF_SKULLRADIUSDAMAGE = 8,//[GEC]
 };
 
 //
@@ -145,7 +146,12 @@ void A_PainShootSkull (AActor *self, angle_t angle, const PClass *spawntype, int
 	if (!P_CheckPosition (other, other->Pos()))
 	{
 		// kill it immediately
-		P_DamageMobj (other, self, self, TELEFRAG_DAMAGE, NAME_None);		
+		P_DamageMobj (other, self, self, TELEFRAG_DAMAGE, NAME_None);	
+
+		if (flags & PAF_SKULLRADIUSDAMAGE)//[GEC]
+		{
+			P_RadiusAttack(self, other, 128, 128, NAME_None, RADF_NOIMPACTDAMAGE);
+		}
 		return;
 	}
 

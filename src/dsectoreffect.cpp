@@ -95,11 +95,11 @@ void DMover::Serialize (FArchive &arc)
 	arc << interpolation;
 }
 
-void DMover::StopInterpolation()
+void DMover::StopInterpolation(bool force)
 {
 	if (interpolation != NULL)
 	{
-		interpolation->DelRef();
+		interpolation->DelRef(force);
 		interpolation = NULL;
 	}
 }
@@ -125,11 +125,17 @@ DMovingCeiling::DMovingCeiling ()
 {
 }
 
-DMovingCeiling::DMovingCeiling (sector_t *sector)
+DMovingCeiling::DMovingCeiling (sector_t *sector, bool splitdoor)//[GEC]
 	: DMover (sector)
 {
 	sector->ceilingdata = this;
 	interpolation = sector->SetInterpolation(sector_t::CeilingMove, true);
+
+	if(splitdoor)//[GEC]
+	{
+		sector->floordata = this;
+		interpolation = sector->SetInterpolation(sector_t::FloorMove, true);
+	}
 }
 
 bool DMover::MoveAttached(int crush, fixed_t move, int floorOrCeiling, bool resetfailed)

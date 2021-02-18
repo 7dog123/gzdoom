@@ -54,11 +54,297 @@
 #include "gl/textures/gl_material.h"
 #include "gl/utility/gl_clock.h"
 
+#include "gl/system/gl_interface.h"
+#include "gl/textures/gl_combiners.h"//[GEC]
+#include "gl/utility/gl_geometric.h"
+
 struct DecalVertex
 {
 	float x,y,z;
 	float u,v;
 };
+
+
+static int SetTex = GL_TEXTURE0;
+static texcoord UV[4];
+static GLSeg glseg2;
+
+struct FSoftDecal
+{
+	unsigned int SoftDecal;
+	//float LastFactor;
+}SoftDecals[16384];
+
+static float LastFactor = 0;
+
+int GLWall::GetLightPSXDecal(int light, int count, int div)
+{
+	//Get MinLevel
+	int MinLevel = PSXDoomLightingEquation(light/255.0, 200, 0)/div;
+
+	float zc = FIXED2FLOAT(seg->frontsector->GetPlaneTexZ(sector_t::ceiling));
+	float zf = FIXED2FLOAT(seg->frontsector->GetPlaneTexZ(sector_t::floor));
+
+	float vtx[]={glseg2.x1,zf,glseg2.y1, glseg2.x1,zc,glseg2.y1, glseg2.x2,zc,glseg2.y2, glseg2.x2,zf,glseg2.y2};
+
+	Plane p;
+
+	p.Init(vtx,4);
+
+	if (!p.ValidNormal()) return MinLevel;
+
+	float dist = fabsf(p.DistToPoint(FIXED2FLOAT(viewx), FIXED2FLOAT(viewz), FIXED2FLOAT(viewy)));
+	float radius = (434);
+	if (radius <= 0.f)   return MinLevel;
+	if (dist > radius)   return MinLevel;
+
+	///
+
+	UV[0].u=0.0; UV[0].v=0.0;
+	UV[1].u=0.0; UV[1].v=1.0;
+	UV[2].u=1.0; UV[2].v=1.0;
+	UV[3].u=1.0; UV[3].v=0.0;
+
+	int Distance = (int)Dist2(glseg2.x1,glseg2.y1, glseg2.x2,glseg2.y2);
+
+	//Funcion que da valores en pares "2"
+	int i14 = 0;
+	Distance = (i14 = Distance) % 8 != 0 ? i14 / 8 + 1 : i14 / 8;
+    Distance *= 8;
+
+	Distance = clamp(Distance,4,4096);//Min And Max Distance
+
+	int W = Distance;
+	int H = 1;
+	byte *buffer;
+	int k = 0;
+
+	float xcamera = 0;
+	float ycamera = 0;
+	float factor = 0;
+	float Dist = 0;
+
+	bool CreateTextrue = false;
+
+	double dx=(glseg2.x2 - glseg2.x1);
+	double dy=(glseg2.y2 - glseg2.y1);
+	double steps;
+	float xInc,yInc, x, y;
+	steps = (float)Distance;
+	xInc=dx/(float)steps;
+	yInc=dy/(float)steps;
+
+	//Create Buffer
+	buffer = (byte *)calloc(sizeof(byte),(W*H));
+	memset(buffer, 0xff, sizeof(byte) * (W*H));
+
+	x = glseg2.x1;
+	y = glseg2.y1;
+
+	//Set New Buffer
+	for(k = 0; k < Distance;k++)
+	{
+		x += xInc;
+		y += yInc;
+
+		xcamera = FIXED2FLOAT(viewx);
+		ycamera = FIXED2FLOAT(viewy);
+
+		Dist = Dist2(xcamera,ycamera, x, y);
+		factor = fabs(-92.0f * (Dist / 200.f));
+
+		buffer[k] = PSXDoomLightingEquation(light / 255.0, factor, 0)/div;
+	}
+
+	//Check MinLevel
+	for(k = 0; k < Distance;k++)
+	{
+		if(buffer[k] == MinLevel)
+		{
+			continue;
+		}
+		else
+		{
+			CreateTextrue = true;
+			break;
+		}
+	}
+
+	if(CreateTextrue)
+	{
+		if(LastFactor == factor)
+		{
+			glBindTexture( GL_TEXTURE_2D, SoftDecals[count].SoftDecal);
+			free(buffer);
+			return -1;
+		}
+
+		//Save LastFactor
+		LastFactor = factor;
+		//SoftDecals[count].LastFactor = factor;
+		glDeleteTextures(1, &SoftDecals[count].SoftDecal);
+
+		if(SoftDecals[count].SoftDecal == 0)
+			glGenTextures(1, &SoftDecals[count].SoftDecal);
+
+		glBindTexture( GL_TEXTURE_2D, SoftDecals[count].SoftDecal);
+
+		glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+
+		// update texture data
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, W, H, 0, GL_LUMINANCE, GL_UNSIGNED_BYTE, buffer);
+
+		free(buffer);
+		return -1;
+	}
+
+	/*if (SoftDecals[count].SoftDecal != 0) 
+	{
+		glDeleteTextures(1, &SoftDecals[count].SoftDecal);
+		SoftDecals[count].SoftDecal = 0;
+	}*/
+
+	free(buffer);
+	return MinLevel;
+}
+
+static float resultdyn[3];
+void GLWall::SetSpecialsDecal(FMaterial * tex, FColormap p, int light, int rellight, int light64)//[GEC]
+{
+	int texturemode;//[GEC]
+	gl_RenderState.GetTextureMode(&texturemode);
+
+	//Pass 1: Light64
+	{
+		if(!gl_fixedcolormap)
+			gl_RenderState.SetLight64(light64);//[GEC]
+		else
+			gl_RenderState.SetLight64(0);//[GEC]
+	}
+
+	//Pass 2: Blend Psx if true
+	if(psx_blend)
+	{
+		gl_RenderState.SetBlendColor(flashcolor, 0);
+	}
+
+	//Pass 4: Light Software
+	if(glset.lightmode == 16 && (!gl_fixedcolormap))
+			gl_RenderState.SetLightMode(1);//[GEC]
+
+	//Pass 5: Blend D64 if false
+	if(!psx_blend)
+	{
+		gl_RenderState.SetBlendColor(flashcolor, 1);
+	}
+
+	//Pass 6: SetSuperBright
+	if(glset.lightmode == 16 && (!gl_fixedcolormap))
+		gl_RenderState.SetPsxBrightLevel(texturemode == TM_MASK ? 0:255);//[GEC]
+
+	gl_RenderState.Apply();//[GEC]
+
+	int texnum = 0;
+	if ((gl.shadermodel < 4))
+	{
+		//Pass 0: Base Textrue
+		SetTextureUnit(0, true);
+
+		texnum ++;
+		tex->Bind(p.colormap,0,0,0,texnum);
+		SetTextureUnit(texnum, true);
+		SetTextureMode(texturemode);
+
+		//Pass 1: Light64
+		{
+			texnum ++;
+			tex->Bind(p.colormap,0,0,0,texnum);
+			SetTextureUnit(texnum, true);
+			if(!gl_fixedcolormap)
+				SetLight64(light64);
+			else
+				SetLight64(0);
+		}
+
+		//Pass 2: Blend Psx if true
+		if(psx_blend)
+		{
+			texnum ++;
+			tex->Bind(p.colormap,0,0,0,texnum);
+			SetTextureUnit(texnum, true);
+			SetBlend(flashcolor, GL_INTERPOLATE);
+			if(APART(flashcolor) == 0)(SetBlend(flashcolor, GL_ADD));
+		}
+
+		//Pass 3: SetColor
+		{
+			texnum ++;
+			tex->Bind(p.colormap,0,0,0,texnum);
+			SetTextureUnit(texnum, true);
+			SetCombineColor();
+		}
+
+		//Pass 4: Light Software
+		if(glset.lightmode == 16 && (!gl_fixedcolormap))
+		{
+			texnum ++;
+			int count = rendered_decals; //Printf("count %d\n",count);
+			int newlight = gl_CalcLightLevel(light, rellight, false);
+			Enable_texunit(texnum);
+			int minlevel = (!gl_fixedcolormap) ? GetLightPSXDecal(newlight, count, (texturemode == TM_MASK)? 2:1) : 0xff;
+			glMatrixMode(GL_TEXTURE);
+			glLoadIdentity();
+			glRotatef(0.0,0.0,0.0,1.0);
+			glMatrixMode(GL_PROJECTION);
+			if(minlevel == -1)
+			{
+				SetTex = GL_TEXTURE0+texnum;
+				glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_COMBINE);
+				glTexEnvi(GL_TEXTURE_ENV, GL_COMBINE_RGB, GL_MODULATE);   //Modulate RGB with RGB
+				glTexEnvi(GL_TEXTURE_ENV, GL_SOURCE0_RGB, GL_PREVIOUS);
+				glTexEnvi(GL_TEXTURE_ENV, GL_OPERAND0_RGB, GL_SRC_COLOR);
+				glTexEnvi(GL_TEXTURE_ENV, GL_SOURCE1_RGB, GL_TEXTURE0 + texnum);
+				glTexEnvi(GL_TEXTURE_ENV, GL_OPERAND1_RGB, GL_SRC_COLOR);
+			}
+			else
+			{
+				SetTex = GL_TEXTURE0;
+				tex->Bind(p.colormap,0,0,0,texnum);
+				SetTextureUnit(texnum, true);
+				SetColor(minlevel, minlevel, minlevel, 0xff);
+			}
+		}
+
+		//Pass 5: Blend D64 if false
+		if(!psx_blend)
+		{
+			texnum ++;
+			tex->Bind(p.colormap,0,0,0,texnum);
+			SetTextureUnit(texnum, true);
+			SetBlend(flashcolor, GL_ADD);
+		}
+
+		//Pass 6: SetSuperBright
+		if(glset.lightmode == 16)
+		{
+			if ((!gl_fixedcolormap)/* || FullBright*/)
+			{
+				texnum ++;
+				tex->Bind(p.colormap,0,0,0,texnum);
+				SetTextureUnit(texnum, true);
+				SetPSXSuperBright((texturemode == TM_MASK) ? 255:255);
+				SetTextureUnit(texnum, true);
+			}
+		}
+		SetCombineAlpha();
+		SetTextureUnit(0, true);
+	}
+}
 
 //==========================================================================
 //
@@ -67,6 +353,10 @@ struct DecalVertex
 //==========================================================================
 void GLWall::DrawDecal(DBaseDecal *decal)
 {
+	int texturemode;//[GEC]
+	gl_RenderState.GetTextureMode(&texturemode);//[GEC]
+	gl_RenderState.ResetSpecials();//[GEC]
+
 	line_t * line=seg->linedef;
 	side_t * side=seg->sidedef;
 	int i;
@@ -197,13 +487,13 @@ void GLWall::DrawDecal(DBaseDecal *decal)
 		loadAlpha = true;
 		p.colormap=CM_SHADE;
 
-		if (glset.lightmode != 8)
+		if (glset.lightmode == 8 || glset.lightmode == 16)// [GEC]
 		{
-			gl_GetLightColor(light, rel, &p, &red, &green, &blue);
+			gl_GetLightColor(lightlevel, rellight, &p, &red, &green, &blue);
 		}
 		else
 		{
-			gl_GetLightColor(lightlevel, rellight, &p, &red, &green, &blue);
+			gl_GetLightColor(light, rel, &p, &red, &green, &blue);
 		}
 		
 		if (gl_lights && GLRenderer->mLightCount && !gl_fixedcolormap && gl_light_sprites)
@@ -212,7 +502,23 @@ void GLWall::DrawDecal(DBaseDecal *decal)
 			fixed_t x, y;
 			decal->GetXY(seg->sidedef, x, y);
 			gl_GetSpriteLight(NULL, x, y, zpos, sub, Colormap.colormap-CM_DESAT0, result, line, side == line->sidedef[0]? 0:1);
-			if (glset.lightmode != 8)
+
+			resultdyn[0] = resultdyn[1] = resultdyn[2] = 0;// [GEC]
+			if (glset.lightmode == 8 || glset.lightmode == 16)// [GEC]
+			{
+				resultdyn[0] = result[0];
+				resultdyn[1] = result[1];
+				resultdyn[2] = result[2];
+				gl_RenderState.SetDynLight(result[0], result[1], result[2]);
+			}
+			else
+			{
+				red = clamp<float>(result[0]+red, 0, 1.0f);
+				green = clamp<float>(result[1]+green, 0, 1.0f);
+				blue = clamp<float>(result[2]+blue, 0, 1.0f);
+			}
+
+			/*if (glset.lightmode != 8)
 			{
 				red = clamp<float>(result[0]+red, 0, 1.0f);
 				green = clamp<float>(result[1]+green, 0, 1.0f);
@@ -221,7 +527,7 @@ void GLWall::DrawDecal(DBaseDecal *decal)
 			else
 			{
 				gl_RenderState.SetDynLight(result[0], result[1], result[2]);
-			}
+			}*/
 		}
 
 		BYTE R = xs_RoundToInt(r * red);
@@ -242,8 +548,6 @@ void GLWall::DrawDecal(DBaseDecal *decal)
 		green = 1.f;
 		blue = 1.f;
 	}
-	
-	
 	a = FIXED2FLOAT(decal->Alpha);
 	
 	// now clip the decal to the actual polygon
@@ -298,6 +602,12 @@ void GLWall::DrawDecal(DBaseDecal *decal)
 	dv[3].y=dv[2].y=glseg.y1+vy*right;
 		
 	zpos+= FRACUNIT*(flipy? decalheight-decaltopo : decaltopo);
+
+	//[GEC]
+	glseg2.x1 = dv[0].x;
+	glseg2.x2 = dv[2].x;
+	glseg2.y1 = dv[0].y;
+	glseg2.y2 = dv[2].y;
 
 	tex->BindPatch(p.colormap, decal->Translation);
 
@@ -364,8 +674,9 @@ void GLWall::DrawDecal(DBaseDecal *decal)
 	if (loadAlpha)
 	{
 		glColor4f(red, green, blue, a);
+		gl_RenderState.SetFragColor(red,green,blue, a);//[GEC]
 
-		if (glset.lightmode == 8)
+		if (glset.lightmode == 8 || glset.lightmode == 16)// [GEC]
 		{
 			if (gl_fixedcolormap)
 				glVertexAttrib1f(VATTR_LIGHTLEVEL, 1.0);
@@ -375,7 +686,7 @@ void GLWall::DrawDecal(DBaseDecal *decal)
 	}
 	else
 	{
-		if (glset.lightmode == 8)
+		if (glset.lightmode == 8 || glset.lightmode == 16)// [GEC]
 		{
 			gl_SetColor(light, rel, &p, a, extralight); // Korshun.
 		}
@@ -398,17 +709,29 @@ void GLWall::DrawDecal(DBaseDecal *decal)
 	if (decal->RenderStyle.SrcAlpha == STYLEALPHA_One) gl_RenderState.AlphaFunc(GL_GEQUAL, gl_mask_threshold);
 	else gl_RenderState.AlphaFunc(GL_GREATER, 0.f);
 
+
+	SetSpecialsDecal(tex, p, light, rel, frontsector->lightlevel_64);//[GEC]
+
 	gl_RenderState.Apply();
 	glBegin(GL_TRIANGLE_FAN);
 	for(i=0;i<4;i++)
 	{
-		glTexCoord2f(dv[i].u,dv[i].v);
+		//glTexCoord2f(dv[i].u,dv[i].v);
+		glMultiTexCoord2f(GL_TEXTURE0, dv[i].u,dv[i].v);//[GEC]
+		if(SetTex != GL_TEXTURE0)
+		{
+			glMultiTexCoord2f(SetTex, UV[i].u,UV[i].v);
+		}
 		glVertex3f(dv[i].x,dv[i].z,dv[i].y);
 	}
 	glEnd();
 	rendered_decals++;
 	gl_RenderState.SetFog(fc,-1);
 	gl_RenderState.SetDynLight(0,0,0);
+
+	//[GEC] Reset default
+	Disable_texunits();
+	gl_RenderState.SetTextureMode(texturemode);
 }
 
 //==========================================================================
@@ -418,6 +741,8 @@ void GLWall::DrawDecal(DBaseDecal *decal)
 //==========================================================================
 void GLWall::DoDrawDecals()
 {
+	gl_RenderState.ResetSpecials();//[GEC]
+
 	DBaseDecal *decal = seg->sidedef->AttachedDecals;
 	while (decal)
 	{

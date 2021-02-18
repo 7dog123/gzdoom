@@ -195,13 +195,26 @@ void FGLRenderer::SetViewport(GL_IRECT *bounds)
 			width = (screenblocks*SCREENWIDTH/10);
 		}
 
+
+		int newheight = 0;
+		if (screenblocks <= 10 && glset.mapheight != 0)
+		{
+			int mapheight = glset.mapheight<0? -glset.mapheight : glset.mapheight;
+			newheight = ((mapheight * viewheight) / SCREENHEIGHT);//[GEC]
+		}
+
 		int trueheight = static_cast<OpenGLFrameBuffer*>(screen)->GetTrueHeight();	// ugh...
+
+		trueheight += newheight;//[GEC]
+
 		int bars = (trueheight-screen->GetHeight())/2; 
 
 		int vw = viewwidth;
 		int vh = viewheight;
-		glViewport(viewwindowx, trueheight-bars-(height+viewwindowy-((height-vh)/2)), vw, height);
-		glScissor(viewwindowx, trueheight-bars-(vh+viewwindowy), vw, vh);
+		//glViewport(viewwindowx, trueheight-bars-(height+viewwindowy-((height-vh)/2)), vw, height);
+		//glScissor(viewwindowx, trueheight-bars-(vh+viewwindowy), vw, vh);
+		glViewport(viewwindowx, (trueheight-bars-(height+viewwindowy-((height-vh)/2))), vw, height);
+		glScissor(viewwindowx, trueheight-bars-(vh+viewwindowy)-newheight, vw, vh+newheight);//[GEC]
 	}
 	else
 	{
@@ -210,12 +223,20 @@ void FGLRenderer::SetViewport(GL_IRECT *bounds)
 	}
 	glEnable(GL_SCISSOR_TEST);
 	
-	#ifdef _DEBUG
+	if(glset.clearbuffer)//[GEC]
+	{
 		glClearColor(0.0f, 0.0f, 0.0f, 0.0f); 
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
-	#else
-		glClear(GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
-	#endif
+	}
+	else
+	{
+		#ifdef _DEBUG
+			glClearColor(0.0f, 0.0f, 0.0f, 0.0f); 
+			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+		#else
+			glClear(GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+		#endif
+	}
 
 	glEnable(GL_MULTISAMPLE);
 	glEnable(GL_DEPTH_TEST);
@@ -392,8 +413,9 @@ void FGLRenderer::RenderScene(int recursion)
 	// Part 1: solid geometry. This is set up so that there are no transparent parts
 	glDepthFunc(GL_LESS);
 
+	bool AlphaTest = level.NoAlphaMask ? true : false;// [GEC] No Alpha Mask on Solid Walls
 
-	gl_RenderState.EnableAlphaTest(false);
+	gl_RenderState.EnableAlphaTest(AlphaTest);//(false);
 
 	glDisable(GL_POLYGON_OFFSET_FILL);	// just in case
 
@@ -450,10 +472,12 @@ void FGLRenderer::RenderScene(int recursion)
 		// Part 1: solid geometry. This is set up so that there are no transparent parts
 
 		// remove any remaining texture bindings and shaders whick may get in the way.
-		gl_RenderState.EnableTexture(false);
+		//gl_RenderState.EnableTexture(false);
+		gl_RenderState.EnableTexture(true);//[GEC] false -> true
 		gl_RenderState.EnableBrightmap(false);
 		gl_RenderState.Apply();
-		gl_drawinfo->drawlists[GLDL_LIGHT].Draw(GLPASS_BASE);
+		gl_RenderState.SetTextureMode(TM_MASK);//[GEC]
+		gl_drawinfo->drawlists[GLDL_LIGHT].Draw(GLPASS_BASE_MASKED);//(GLPASS_BASE);
 		gl_RenderState.EnableTexture(true);
 
 		// Part 2: masked geometry. This is set up so that only pixels with alpha>0.5 will show
@@ -475,6 +499,7 @@ void FGLRenderer::RenderScene(int recursion)
 				gl_RenderState.BlendFunc(GL_ONE, GL_ONE);
 				glDepthFunc(GL_EQUAL);
 				if (glset.lightmode == 8) glVertexAttrib1f(VATTR_LIGHTLEVEL, 1.0f); // Korshun.
+				if (glset.lightmode == 16) glVertexAttrib1f(VATTR_LIGHTLEVEL, 1.0f); // [GEC]
 				for(int i=GLDL_FIRSTLIGHT; i<=GLDL_LASTLIGHT; i++)
 				{
 					gl_drawinfo->drawlists[i].Draw(GLPASS_LIGHT);
@@ -485,13 +510,15 @@ void FGLRenderer::RenderScene(int recursion)
 		}
 
 		// third pass: modulated texture
-		glColor3f(1.0f, 1.0f, 1.0f);
-		gl_RenderState.BlendFunc(GL_DST_COLOR, GL_ZERO);
+		//glColor3f(1.0f, 1.0f, 1.0f);
+		//gl_RenderState.BlendFunc(GL_DST_COLOR, GL_ZERO);
+		glColor4f(0.5f, 0.5f, 0.5f, 1.0f);
+		gl_RenderState.BlendFunc(GL_DST_COLOR, GL_SRC_COLOR);//[GEC]
 		gl_RenderState.EnableFog(false);
 		glDepthFunc(GL_LEQUAL);
 		if (gl_texture) 
 		{
-			gl_RenderState.EnableAlphaTest(false);
+			gl_RenderState.EnableAlphaTest(AlphaTest);//(false);
 			gl_drawinfo->drawlists[GLDL_LIGHT].Sort();
 			gl_drawinfo->drawlists[GLDL_LIGHT].Draw(GLPASS_TEXTURE);
 			gl_RenderState.EnableAlphaTest(true);
@@ -517,6 +544,22 @@ void FGLRenderer::RenderScene(int recursion)
 			}
 			else gl_lights=false;
 		}
+
+		// [GEC] pass: blend texture
+		gl_RenderState.EnableTexture(true);
+		gl_RenderState.SetTextureMode(TM_MASK);
+		gl_RenderState.EnableBrightmap(false);
+		gl_RenderState.EnableFog(true);
+		glDepthFunc(GL_LEQUAL);
+		gl_RenderState.EnableAlphaTest(AlphaTest);//(false);
+		gl_drawinfo->drawlists[GLDL_LIGHT].Sort();
+		gl_drawinfo->drawlists[GLDL_LIGHT].Draw(GLPASS_TEXBlEND);
+		gl_RenderState.EnableAlphaTest(true);
+		gl_drawinfo->drawlists[GLDL_LIGHTBRIGHT].Sort();
+		gl_drawinfo->drawlists[GLDL_LIGHTBRIGHT].Draw(GLPASS_TEXBlEND);
+		gl_drawinfo->drawlists[GLDL_LIGHTMASKED].Sort();
+		gl_drawinfo->drawlists[GLDL_LIGHTMASKED].Draw(GLPASS_TEXBlEND);
+		gl_RenderState.SetTextureMode(TM_MODULATE);
 	}
 
 	gl_RenderState.BlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -631,6 +674,8 @@ void FGLRenderer::DrawScene(bool toscreen)
 // Draws a blend over the entire view
 //
 //==========================================================================
+EXTERN_CVAR(Int, blend_type);//[GEC]
+
 void FGLRenderer::DrawBlend(sector_t * viewsector)
 {
 	float blend[4]={0,0,0,0};
@@ -748,19 +793,22 @@ void FGLRenderer::DrawBlend(sector_t * viewsector)
 		V_AddBlend (player->BlendR, player->BlendG, player->BlendB, player->BlendA, blend);
 	}
 
-	if (blend[3]>0.0f)
+	if(blend_type == 0)//[GEC]
 	{
-		gl_RenderState.BlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-		gl_RenderState.EnableAlphaTest(false);
-		gl_RenderState.EnableTexture(false);
-		glColor4fv(blend);
-		gl_RenderState.Apply(true);
-		glBegin(GL_TRIANGLE_STRIP);
-		glVertex2f( 0.0f, 0.0f);
-		glVertex2f( 0.0f, (float)SCREENHEIGHT);
-		glVertex2f( (float)SCREENWIDTH, 0.0f);
-		glVertex2f( (float)SCREENWIDTH, (float)SCREENHEIGHT);
-		glEnd();
+		if (blend[3]>0.0f)
+		{
+			gl_RenderState.BlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+			gl_RenderState.EnableAlphaTest(false);
+			gl_RenderState.EnableTexture(false);
+			glColor4fv(blend);
+			gl_RenderState.Apply(true);
+			glBegin(GL_TRIANGLE_STRIP);
+			glVertex2f( 0.0f, 0.0f);
+			glVertex2f( 0.0f, (float)SCREENHEIGHT);
+			glVertex2f( (float)SCREENWIDTH, 0.0f);
+			glVertex2f( (float)SCREENWIDTH, (float)SCREENHEIGHT);
+			glEnd();
+		}
 	}
 }
 

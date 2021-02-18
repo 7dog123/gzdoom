@@ -145,3 +145,115 @@ DEFINE_ACTION_FUNCTION(AActor, A_SkelFist)
 		P_TraceBleed (newdam > 0 ? newdam : damage, self->target, self);
 	}
 }
+
+DEFINE_ACTION_FUNCTION_PARAMS(AActor, A_CustomTracer) //[GEC]
+{
+	ACTION_PARAM_START(7);
+	ACTION_PARAM_CLASS(smoketype,0);
+	ACTION_PARAM_CLASS(pufftype,1);
+	ACTION_PARAM_FIXED(zvel, 2);
+	ACTION_PARAM_ANGLE(angle, 3);
+	ACTION_PARAM_INT(startdelay, 4);
+	ACTION_PARAM_INT(seekerlimit, 5);
+	ACTION_PARAM_INT(randomseekmask, 6);
+
+	angle_t exact;
+	fixed_t dist;
+	fixed_t slope;
+	AActor *dest;
+	AActor *smoke;
+				
+	startdelay = (int)abs(startdelay);
+	seekerlimit = (int)abs(seekerlimit);
+	randomseekmask = (int)abs(randomseekmask);
+
+	if (level.time & randomseekmask)
+		return;
+
+	if(self->special1 < -startdelay || startdelay == 0)
+	{
+		if(pufftype)
+		{
+			P_SpawnPuff (self, pufftype, self->X(), self->Y(), self->Z(), 0, 3);
+		}
+			
+		if(smoketype)
+		{
+			smoke = Spawn (smoketype, self->Vec3Offset(-self->velx, -self->vely, 0), ALLOW_REPLACE);
+
+			smoke->velz = FRACUNIT;
+			smoke->tics -= pr_tracer()&3;
+			if (smoke->tics < 1)
+				smoke->tics = 1;
+		}
+
+		if(seekerlimit != 0)
+		{
+			if(self->special1-- < -(seekerlimit + startdelay))
+			{
+				return;
+			}
+		}
+		
+		// adjust direction
+		dest = self->tracer;
+			
+		if (!dest || dest->health <= 0 || self->Speed == 0 || !self->CanSeek(dest))
+			return;
+		
+		// change angle 	
+		exact = self->AngleTo(dest);
+
+		//Printf("angle %d\n",angle);
+		if (exact != self->angle)
+		{
+			if (exact - self->angle > 0x80000000)
+			{
+				self->angle -= angle;//TRACEANGLE;
+				if (exact - self->angle < 0x80000000)
+					self->angle = exact;
+			}
+			else
+			{
+				self->angle += angle;//TRACEANGLE;
+				if (exact - self->angle > 0x80000000)
+					self->angle = exact;
+			}
+		}
+			
+		exact = self->angle>>ANGLETOFINESHIFT;
+		self->velx = FixedMul (self->Speed, finecosine[exact]);
+		self->vely = FixedMul (self->Speed, finesine[exact]);
+
+		if (!(self->flags3 & (MF3_FLOORHUGGER|MF3_CEILINGHUGGER)))
+		{
+			// change slope
+			dist = self->AproxDistance (dest) / self->Speed;
+
+			if (dist < 1)
+				dist = 1;
+
+			if (dest->height >= 56*FRACUNIT)
+			{
+				slope = (dest->Z()+40*FRACUNIT - self->Z()) / dist;
+			}
+			else
+			{
+				slope = (dest->Z() + self->height*2/3 - self->Z()) / dist;
+			}
+
+			if (slope < self->velz)
+				self->velz -= zvel;//FRACUNIT/8;
+			else
+				self->velz += zvel;//FRACUNIT/8;
+
+			//Printf("speed %d\n",zvel);
+			//Printf("speed %f\n",FIXED2FLOAT(zvel));
+		}
+	}
+	else
+	{
+		//self->special1= 0;// reset?
+        self->special1--;
+    }
+}

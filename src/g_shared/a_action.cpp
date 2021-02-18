@@ -189,6 +189,8 @@ DEFINE_ACTION_FUNCTION(AActor, A_FreezeDeath)
 		self->player->damagecount = 0;
 		self->player->poisoncount = 0;
 		self->player->bonuscount = 0;
+		self->player->bfgcolor = 0;//[GEC]
+		self->player->bfgticdown = 0;//[GEC]
 	}
 	else if (self->flags3 & MF3_ISMONSTER && self->special)
 	{ // Initiate monster death actions

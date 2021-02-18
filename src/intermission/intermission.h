@@ -68,6 +68,7 @@ struct FIntermissionAction
 	int mSize;
 	const PClass *mClass;
 	FString mMusic;
+	FString mNextMusic;//[GEC]
 	int mMusicOrder;
 	int mCdTrack;
 	int mCdId;
@@ -114,6 +115,28 @@ struct FIntermissionActionTextscreen : public FIntermissionAction
 	int mTextX, mTextY;
 	EColorRange mTextColor;
 
+	// [GEC]
+	bool		m_TextAdd;				//TextAdd
+	int			m_TextSpeed;			//TextSpeed
+	int			m_TextDelay;			//TextDelay
+	int			m_TextResW, m_TextResH;	//ResolutionText
+	int			m_TexX, m_TexY;			//TexPosition
+	int			m_PicResW, m_PicResH;	//ResolutionPic
+	int			m_PicX, m_PicY;			//PicPosition
+	bool		m_CenterText;			//CenterText
+	bool		m_FadeText;				//FadeTex
+	bool		m_PlainText;			//PlainText
+	bool		m_PlainSync;			//PlainSync
+	bool		m_ScrollText;			//ScrollText
+	int			m_ScrollTextSpeed;		//ScrollTextSpeed
+	int			m_ScrollTextDirection;	//ScrollTextDirection
+	int			m_ScrollTextTime;		//m_ScrollTextTime
+	int			m_RowPadding;			//RowPadding
+	FName		m_FontName;				//FontName
+	gamestate_t	m_WipeOut;				//WipeOut
+	bool		m_NoSkip;				//Noskip
+	bool		m_AutoSkip;				//AutoSkip
+
 	FIntermissionActionTextscreen();
 	virtual bool ParseKey(FScanner &sc);
 };
@@ -125,6 +148,18 @@ struct FIntermissionActionCast : public FIntermissionAction
 	FString mName;
 	FName mCastClass;
 	TArray<FCastSound> mCastSounds;
+
+	FName	mFontName;//FontName
+	int		mYpos, mResW, mResH;//[GEC]
+	FString mText;
+	int		mYpos2, mXpos2;//[GEC]
+	FString mShotSound;//[GEC]
+	bool	mcastrotation;//[GEC]
+	int		mlightmax;//[GEC]
+	int		mlightplus;//[GEC]
+	EColorRange mTextColor;//[GEC]
+	int		mYposSprite;//[GEC]
+	bool	mCenterXSprite;//[GEC]
 
 	FIntermissionActionCast();
 	virtual bool ParseKey(FScanner &sc);
@@ -171,6 +206,12 @@ public:
 	int mTicker;
 	bool mPaletteChanged;
 
+	bool Run_mScrollTicker;		//[GEC] Run_mScrollTicker
+	int  mScrollTicker;			//[GEC] mScrollTicker
+	bool Run_mAlphaTicker;		//[GEC] Run_mAlphaTicker
+	fixed_t  mAlphaTicker;		//[GEC] mAlphaTicker
+	float  mAlpha;				//[GEC] mAlpha Colector
+
 	DIntermissionScreen() {}
 	virtual void Init(FIntermissionAction *desc, bool first);
 	virtual int Responder (event_t *ev);
@@ -216,6 +257,33 @@ class DIntermissionScreenText : public DIntermissionScreen
 	int mTextLen;
 	EColorRange mTextColor;
 
+	// [GEC]
+	fixed_t* mAlpharows;	// [GEC]
+	int* mTextCount;		// [GEC]
+	int* mTextCount2;		// [GEC]
+	int mCount;				// [GEC]
+	int mNumRows;			// [GEC]
+	int mRowPadding;		// [GEC]
+
+	FName	mFontName;				//FontName
+	bool	mTextAdd;				//TextAdd
+	int		mTextResW, mTextResH;	//ResolutionText
+	bool	mCenterText;			//CenterText
+	bool	mFadeText;				//Fade
+	bool	mPlainText;				//PlainText
+	bool	mPlainSync;				//PlainSync
+	bool	mScrollText;			//ScrollText
+	int		mScrollTextSpeed;		//ScrollTextSpeed
+	int		mScrollTextDirection;	//ScrollTextDirection
+	int		mScrollTextTime;		//ScrollTextDirection
+
+	bool mWaitScroll;	// [GEC]
+	bool mWait_Aplha;	// [GEC]
+	bool mNoSkip;		// [GEC]
+	bool mskip;			// [GEC]
+	bool mButtonPressed;// [GEC]
+	bool mAutoSkip;		// [GEC]
+
 public:
 
 	DIntermissionScreenText() {}
@@ -233,6 +301,24 @@ class DIntermissionScreenCast : public DIntermissionScreen
 	AActor *mDefaults;
 	TArray<FICastSound> mCastSounds;
 
+	int mYpos, mResW, mResH;//[GEC]
+	FName	mFontName; //FontName
+	EColorRange mTextColor;//[GEC]
+
+	FString mText;
+	int		mYpos2, mXpos2, mResW2, mResH2;//[GEC]
+	FString mShotSound;//[GEC]
+	int		mYposSprite;//[GEC]
+	bool	mCenterXSprite;//[GEC]
+
+	bool	mcastrotationenable;//[GEC]
+	int		mcastrotation;//[GEC]
+	int		mcastlight;//[GEC]
+	int		mlightplus;//[GEC]
+	int		mlightmax;//[GEC]
+
+	
+
 	int 			casttics;
 	const FRemapTable *casttranslation;	// [RH] Draw "our hero" with their chosen suit color
 	FState*			caststate;
@@ -242,7 +328,6 @@ class DIntermissionScreenCast : public DIntermissionScreen
 	bool	 		castattacking;
 	int 			castframes;
 	int 			castonmelee;
-
 	void PlayAttackSound();
 
 public:
@@ -316,10 +401,11 @@ void F_StartIntermission(FName desc, BYTE state);
 void F_EndFinale ();
 void F_AdvanceIntermission();
 
+#include "g_level.h"
 // Create an intermission from old cluster data
 void F_StartFinale (const char *music, int musicorder, int cdtrack, unsigned int cdid, const char *flat, 
 					const char *text, INTBOOL textInLump, INTBOOL finalePic, INTBOOL lookupText, 
-					bool ending, FName endsequence = NAME_None);
+					bool ending, FName endsequence = NAME_None, cluster_info_t * cluster = NULL);
 
 
 

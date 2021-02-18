@@ -71,6 +71,13 @@ extern int		NoWipe;
 //
 //==========================================================================
 
+static int mPicResW = 0;	//[GEC] 
+static int mPicResH = 0;	//[GEC]
+static int mPicX = 0;		//[GEC] 
+static int mPicY = 0;		//[GEC]
+static gamestate_t	mWipeOut = GS_FINALE;//[GEC]
+FString NextMusic = "";//[GEC]
+
 void DIntermissionScreen::Init(FIntermissionAction *desc, bool first)
 {
 	int lumpnum;
@@ -84,10 +91,18 @@ void DIntermissionScreen::Init(FIntermissionAction *desc, bool first)
 		}
 		else
 		{
-			S_ChangeMusic (desc->mMusic, desc->mMusicOrder, desc->mMusicLooping);
+			bool MusicLooping = desc->mMusicLooping;
+			if (desc->mNextMusic.IsNotEmpty())//[GEC]
+				MusicLooping = false;
+
+			S_ChangeMusic (desc->mMusic, desc->mMusicOrder, MusicLooping);
+			
 		}
 	}
 	mDuration = desc->mDuration;
+
+	if(desc->mNextMusic.IsNotEmpty())//[GEC]
+		NextMusic = desc->mNextMusic;
 
 	const char *texname = desc->mBackground;
 	if (*texname == '@')
@@ -145,6 +160,11 @@ void DIntermissionScreen::Init(FIntermissionAction *desc, bool first)
 		mOverlays[i].mPic = TexMan.CheckForTexture(desc->mOverlays[i].mName, FTexture::TEX_MiscPatch);
 	}
 	mTicker = 0;
+	Run_mScrollTicker = false;	//[GEC] Run_mScrollTicker
+	mScrollTicker = 0;			//[GEC] mScrollTicker
+	Run_mAlphaTicker = false;	//[GEC] Run_mAlphaTicker
+	mAlphaTicker = 0;			//[GEC] mAlphaTicker
+	mAlpha = 0;					//[GEC] mAlpha Colector
 }
 
 
@@ -152,6 +172,10 @@ int DIntermissionScreen::Responder (event_t *ev)
 {
 	if (ev->type == EV_KeyDown)
 	{
+		/*if(mWipeOut != GS_FINALE)//[GEC]
+			wipegamestate = mWipeOut;
+		else
+			NoWipe = 30;*/
 		return -1;
 	}
 	return 0;
@@ -159,7 +183,25 @@ int DIntermissionScreen::Responder (event_t *ev)
 
 int DIntermissionScreen::Ticker ()
 {
+	//Printf("mNextMusic %s\n", mNextMusic.GetChars());
+	//Printf("mDuration %d\n", mDuration);
+
 	if (++mTicker >= mDuration && mDuration > 0) return -1;
+	if(Run_mScrollTicker)//[GEC] mScrollTicker
+	{
+		mScrollTicker++;
+	}
+	if(Run_mAlphaTicker)//[GEC] mAlphaTicker
+	{
+		if(mAlphaTicker >= FLOAT2FIXED(0xFF))
+		{
+			mAlphaTicker = FLOAT2FIXED(0xFF);
+		}
+		else
+		{
+			mAlphaTicker += FLOAT2FIXED(mAlpha);
+		}
+	}
 	return 0;
 }
 
@@ -178,11 +220,39 @@ bool DIntermissionScreen::CheckOverlay(int i)
 
 void DIntermissionScreen::Drawer ()
 {
+	if (NextMusic.IsNotEmpty())
+	{
+		//Printf("mNextMusic %s play %d\n", NextMusic.GetChars(),S_CheckMusicPlaying());
+		if(!S_CheckMusicPlaying())
+		{
+			S_ChangeMusic (NextMusic, 0, true);
+			NextMusic = NULL;
+		}
+	}
+
 	if (mBackground.isValid())
 	{
 		if (!mFlatfill)
 		{
-			screen->DrawTexture (TexMan[mBackground], 0, 0, DTA_Fullscreen, true, TAG_DONE);
+			//Printf("mPicResW %d mPicResH %d\n",mPicResW,mPicResH);
+			if(mPicResW == 0 && mPicResH == 0)//[GEC]
+			{
+				screen->DrawTexture (TexMan[mBackground], mPicX, mPicX, DTA_Fullscreen, true, TAG_DONE);//[GEC]
+			}
+			else
+			{
+				screen->Clear (0, 0, SCREENWIDTH, SCREENHEIGHT, 0, 0);//[GEC] Refresh view
+
+				double rx = (double)mPicX;
+				double ry = (double)mPicY;
+				double rw = TexMan[mBackground]->GetScaledWidthDouble();
+				double rh = TexMan[mBackground]->GetScaledHeightDouble();
+
+				screen->VirtualToRealCoords(rx, ry, rw, rh, mPicResW, mPicResH, true);
+
+				screen->DrawTexture (TexMan[mBackground], rx, ry,
+					DTA_DestWidthF, rw, DTA_DestHeightF, rh, TAG_DONE);
+			}
 		}
 		else
 		{
@@ -303,21 +373,523 @@ void DIntermissionScreenText::Init(FIntermissionAction *desc, bool first)
 	mTextColor = static_cast<FIntermissionActionTextscreen*>(desc)->mTextColor;
 	// For text screens, the duration only counts when the text is complete.
 	if (mDuration > 0) mDuration += mTextDelay + mTextSpeed * mTextLen;
+
+	//----------[GEC] Stuff
+	mCount = 0;
+
+	// [GEC] Count number of Xrows in this text
+	int c;
+	for (mNumRows = 0, c = 0; mText[c] != '\0'; ++c)
+	{
+		mNumRows += (mText[c] == '\n');
+	}
+	mNumRows += 1;
+	
+	// [GEC] Set Size on Xrows
+	mAlpharows = new fixed_t[mNumRows];
+	mTextCount = new int[mNumRows];
+	mTextCount2 = new int[mNumRows];
+	for (int k = 0; k < mNumRows; k++)
+	{
+		mAlpharows[k] = 0;
+		mTextCount[k] = 0;
+		mTextCount2[k] = 0;
+
+		if(mFadeText)
+			mAlpharows[k] = 0;
+		else
+			mAlpharows[k] = FLOAT2FIXED(0xFF);
+	}
+
+	mFontName = static_cast<FIntermissionActionTextscreen*>(desc)->m_FontName;
+	mTextAdd = static_cast<FIntermissionActionTextscreen*>(desc)->m_TextAdd;
+	mTextResW = static_cast<FIntermissionActionTextscreen*>(desc)->m_TextResW;
+	mTextResH = static_cast<FIntermissionActionTextscreen*>(desc)->m_TextResH;
+
+	int TextSpeed = static_cast<FIntermissionActionTextscreen*>(desc)->m_TextSpeed;
+	int TextDelay = static_cast<FIntermissionActionTextscreen*>(desc)->m_TextDelay;
+	if(TextSpeed != -1) mTextSpeed  = TextSpeed;
+	if(TextDelay != -1) mTextDelay  = TextDelay;
+
+	int TextX = static_cast<FIntermissionActionTextscreen*>(desc)->m_TexX;
+	int TextY = static_cast<FIntermissionActionTextscreen*>(desc)->m_TexY;
+	if(TextX != 0) mTextX  = TextX;
+	if(TextY != 0) mTextY  = TextY;
+	
+	mCenterText = static_cast<FIntermissionActionTextscreen*>(desc)->m_CenterText;
+	mFadeText = static_cast<FIntermissionActionTextscreen*>(desc)->m_FadeText;
+	mPlainText = static_cast<FIntermissionActionTextscreen*>(desc)->m_PlainText;
+	mPlainSync = static_cast<FIntermissionActionTextscreen*>(desc)->m_PlainSync;
+	mScrollText = static_cast<FIntermissionActionTextscreen*>(desc)->m_ScrollText;
+	mScrollTextSpeed = static_cast<FIntermissionActionTextscreen*>(desc)->m_ScrollTextSpeed;
+	mScrollTextDirection = static_cast<FIntermissionActionTextscreen*>(desc)->m_ScrollTextDirection;
+	mScrollTextTime = static_cast<FIntermissionActionTextscreen*>(desc)->m_ScrollTextTime;
+	if(mPlainSync) mWait_Aplha = true;
+	else mWait_Aplha = false;
+	mRowPadding = static_cast<FIntermissionActionTextscreen*>(desc)->m_RowPadding;
+
+	mPicResW = static_cast<FIntermissionActionTextscreen*>(desc)->m_PicResW;
+	mPicResH = static_cast<FIntermissionActionTextscreen*>(desc)->m_PicResH;
+	mPicX = static_cast<FIntermissionActionTextscreen*>(desc)->m_PicX;
+	mPicY = static_cast<FIntermissionActionTextscreen*>(desc)->m_PicY;
+	mWipeOut = static_cast<FIntermissionActionTextscreen*>(desc)->m_WipeOut;
+
+	mWaitScroll = true;			//Default true
+	mButtonPressed = false;		//Default false
+	mskip = false;				//Default false
+
+	mNoSkip = static_cast<FIntermissionActionTextscreen*>(desc)->m_NoSkip;
+	mAutoSkip = static_cast<FIntermissionActionTextscreen*>(desc)->m_AutoSkip;
+
+	if(mFadeText)
+	{
+		mAlphaTicker = 0; // [GEC] Reset mAlphaTicker
+		Run_mAlphaTicker = true;
+	}
+
+	if(mScrollText)
+	{
+		mScrollTicker = 0;			//[GEC] Reset mScrollTicker
+		Run_mScrollTicker = false;	//[GEC]
+	}
+
+	
+	//mNoSkip = true;
+	//Printf("mRowPadding %d\n",mRowPadding);
+
+	//m_ScrollTextTime = 100;
+	
+
+	//mTextSpeed = 4;
+	//mTextDelay = 7;
+	/*Printf("mTextSpeed %d\n",mTextSpeed);
+	Printf("mTextDelay %d\n",mTextDelay);
+	Printf("mTextW %d\n",mTextW);
+	Printf("mTextH %d\n",mTextH);*/
 }
 
 int DIntermissionScreenText::Responder (event_t *ev)
 {
 	if (ev->type == EV_KeyDown)
 	{
-		if (mTicker < mTextDelay + (mTextLen * mTextSpeed))
+		if(!mNoSkip)
 		{
-			mTicker = mTextDelay + (mTextLen * mTextSpeed);
-			return 1;
+			if (mTicker < mTextDelay + (mTextLen * mTextSpeed))
+			{
+				mskip = true;
+				mCount = mNumRows-1;
+				mTicker = mTextDelay + (mTextLen * mTextSpeed);
+				return 1;
+			}
 		}
+		else if(mNoSkip)return 0;
 	}
 	return Super::Responder(ev);
 }
 
+float AlphaShift(float shift, float steps) // Funcion Modificada de ColorShiftPalette
+{
+		return ((float)((1.0 *(float)shift)/(float)steps));
+}
+
+//[GEC] Nuevo sistema para ScreenText con posibilidad de centrar el texto al estilo de PSXDoom & DOOM64
+void DIntermissionScreenText::Drawer ()
+{
+	Super::Drawer();
+	if (mTicker >= mTextDelay)
+	{
+		//Printf("mskip %d\n",mskip);
+
+		FFont * Font = SmallFont;
+		//Set New Font
+		const char *fontname = mFontName.GetChars();
+		Font = V_GetFont (fontname);
+		if (Font == NULL)
+			Font = SmallFont;
+
+		FTexture *pic;
+		int w;
+		size_t count;
+		int c;
+		int index;
+		const FRemapTable *range;
+		const char *ch = mText;
+		const int kerning = Font->GetDefaultKerning();
+
+		const char *buffer = (const char *) malloc (mTextLen + 1);
+		memset((char *)buffer, 0, mTextLen + 1);
+
+		int alpha_index = 0;
+		int scroll = 0;
+		int scrollx = 0, scrolly = 0;
+		double rx ,ry, rw, rh;
+
+		// Count number of rows in this text. Since it does not word-wrap, we just count
+		// line feed characters.
+		int numrows = 1;
+		int charcount = 0;
+		int charcount2 = 0;
+
+		for (c = 0; c <= mTextLen; c++)
+		{
+			if(mPlainText)
+			{
+				if((ch[c] == '\0')){mTextCount[numrows-1] = charcount+1;}
+				if((ch[c] == '\n')){mTextCount[numrows-1] = charcount+1;}
+				charcount++;
+			}
+
+			if(mFadeText)
+			{
+				if((ch[c] == '\0')){mTextCount2[numrows-1] = charcount2; charcount2 = 0;}
+				if((ch[c] == '\n')){mTextCount2[numrows-1] = charcount2; charcount2 = 0;}
+				else charcount2++;
+			}
+
+			numrows += (ch[c] == '\n');
+		}
+
+		int rowheight = Font->GetHeight() * CleanYfac;
+		int rowpadding = (gameinfo.gametype & (GAME_DoomStrifeChex) ? 3 : -1) * CleanYfac;
+
+		int cx = (mTextX - 160)*CleanXfac + screen->GetWidth() / 2;
+		int cy = (mTextY - 100)*CleanYfac + screen->GetHeight() / 2;
+		int startx = cx;
+
+		if(mTextResW != 0 && mTextResH != 0)
+		{
+			rowheight = Font->GetHeight();
+			if(mRowPadding != FRACUNIT)
+				rowpadding = mRowPadding;
+		}
+		else
+		{
+			if(mRowPadding != FRACUNIT)
+				rowpadding = mRowPadding * CleanYfac;
+		}
+
+		if(mTextResW != 0 && mTextResH != 0)//[GEC]
+		{
+			cx = (mTextX);
+			cy = (mTextY);
+			startx = cx;
+		}
+
+		if(mTextResW == 0 && mTextResH == 0)//[GEC]
+		{
+			// Does this text fall off the end of the screen? If so, try to eliminate some margins first.
+			while (rowpadding > 0 && cy + numrows * (rowheight + rowpadding) - rowpadding > screen->GetHeight())
+			{
+				rowpadding--;
+			}
+			// If it's still off the bottom, try to center it vertically.
+			if (cy + numrows * (rowheight + rowpadding) - rowpadding > screen->GetHeight())
+			{
+				cy = (screen->GetHeight() - (numrows * (rowheight + rowpadding) - rowpadding)) / 2;
+				// If it's off the top now, you're screwed. It's too tall to fit.
+				if (cy < 0)
+				{
+					cy = 0;
+				}
+			}
+		}
+		rowheight += rowpadding;
+
+		// draw some of the text onto the screen
+		count = (mTicker - mTextDelay) / mTextSpeed;
+		range = Font->GetColorTranslation (mTextColor);
+
+		if(!mskip)
+		{
+			if(!mPlainText)
+			{
+				if(mFadeText)//[GEC] mFade
+				{
+					mAlpha = (float)((float)255/(float)mTextCount2[mCount])/(float)mTextSpeed;
+					if(FLOAT2FIXED(mAlpha) == 0)
+					{
+						mAlpha = 255.0;
+						mCount++;
+					}
+					mAlpharows[mCount] = mAlphaTicker;
+
+					if((ch[count] == '\n') && !mButtonPressed)
+					{
+						mButtonPressed = true;
+						mAlpharows[mCount] = FLOAT2FIXED(0xFF);
+						mAlphaTicker = 0; // [GEC] Reset mAlphaTicker
+						mCount++;
+					}
+
+					if(!(ch[count] == '\n') && mButtonPressed)
+					{mButtonPressed = false;}
+
+					mCount = clamp<int>(mCount, 0, numrows);
+					if((mCount == (numrows)) && !mButtonPressed) // [GEC] Stop mAlphaTicker
+					{
+						mAlphaTicker = 0; // [GEC] Reset mAlphaTicker
+						Run_mAlphaTicker = false;
+						mskip = true;
+					}
+				}
+				else
+				{
+					if((int)count > mTextLen) // [GEC] Stop mAlphaTicker
+					{
+						mAlphaTicker = 0; // [GEC] Reset mAlphaTicker
+						Run_mAlphaTicker = false;
+						mskip = true;
+					}
+				}
+			}
+			else if(mPlainText && !mPlainSync)
+			{
+				if(mFadeText)//[GEC] mFade
+				{
+					mAlpha = (float)((float)255/(float)mTextCount2[mCount])/(float)mTextSpeed;
+					mAlpharows[mCount] = mAlphaTicker;
+				}
+				else
+				{
+					mAlpharows[mCount] = FLOAT2FIXED(0xFF);
+				}
+
+				//Printf("mCount %d numrows %d count %d \nmAlpha %f\n",mCount, numrows, count, mAlpha);
+
+				if((count == mTextCount[mCount]) && !mButtonPressed)
+				{
+					mButtonPressed = true;
+					mAlpharows[mCount] = FLOAT2FIXED(0xFF);
+					mAlpharows[mCount+1] = FLOAT2FIXED(0);
+					mAlphaTicker = 0; // [GEC] Reset mAlphaTicker
+					mCount++;
+				}
+
+				if(!(count == mTextCount[mCount]) && mButtonPressed)
+				{mButtonPressed = false;}
+
+				mCount = clamp<int>(mCount, 0, numrows);
+				if((mCount == (numrows)) && !mButtonPressed) // [GEC] Stop mAlphaTicker
+				{
+					mAlphaTicker = 0; // [GEC] Reset mAlphaTicker
+					Run_mAlphaTicker = false;
+					mCount++;
+					mskip = true;
+				}
+			}
+			else if(mPlainText && mPlainSync)
+			{
+				//[GEC] En Doom64 Ex es un valor de 6 Aquí es 12 Para ser ajustable con la velocidad
+				mAlpha = AlphaShift((float)12,(float)mTextSpeed); 
+
+				if(mFadeText)//[GEC] mFade
+					mAlpharows[mCount] = mAlphaTicker;
+				else
+					mAlpharows[mCount] = FLOAT2FIXED(0xFF);
+
+				/*if(mCount == numrows-1)
+				{
+					mAlphaTicker = 0; // [GEC] Reset mAlphaTicker
+					Run_mAlphaTicker = false;
+					mskip = true;
+				}*/
+
+				if((mAlphaTicker == FLOAT2FIXED(0xFF)) && !mButtonPressed)
+				{
+					mButtonPressed = (mAlphaTicker == FLOAT2FIXED(0xFF));
+					mAlpharows[mCount] = FLOAT2FIXED(0xFF);
+					mAlpharows[mCount+1] = FLOAT2FIXED(0);
+					mAlphaTicker = 0; // [GEC] Reset mAlphaTicker
+					mCount++;
+				}
+
+				if(!(mAlphaTicker == FLOAT2FIXED(0xFF)) && mButtonPressed)
+				{mButtonPressed = false;}
+
+				if((mCount == numrows) && !mButtonPressed) // [GEC] Stop mAlphaTicker
+				{
+					mAlphaTicker = 0; // [GEC] Reset mAlphaTicker
+					Run_mAlphaTicker = false;
+					mskip = true;
+					mCount--;
+					mTicker = mTextDelay + (mTextLen * mTextSpeed);
+				}
+				else
+				{
+					Run_mAlphaTicker = true;
+				}
+			}
+		}
+		else
+		{
+			for (index = 0; index < numrows; index++)
+			mAlpharows[index] = FLOAT2FIXED(0xFF);
+
+			mWaitScroll = false;
+			//mCount = numrows-2;
+			mAlphaTicker = 0; // [GEC] Reset mAlphaTicker
+			Run_mAlphaTicker = false;
+		}
+		//Printf("mCount %d mTextCount[mCount]%d\n",mCount,mTextCount[mCount]);
+
+		if(mScrollText && !mWaitScroll)
+		{
+			Run_mScrollTicker = true;
+			if(mTextResW != 0 && mTextResH != 0)
+			{
+				scroll +=(mScrollTicker / mScrollTextSpeed);
+			}
+			else
+			{
+				scroll +=(mScrollTicker / mScrollTextSpeed)* CleanYfac;
+			}
+		}
+
+		for(index = 0; index < (int)(mPlainText ? mTextCount[mCount] : count); index++)
+		{
+			if (index >= mTextLen)
+			{
+				if(mskip)
+				{
+					if (mScrollTicker >= mScrollTextTime)
+					{
+						mNoSkip = false;
+						Run_mScrollTicker = false;	//[GEC]
+						mAlphaTicker = 0; // [GEC] Reset mAlphaTicker
+						Run_mAlphaTicker = false;
+						//auto skip
+						if(mAutoSkip)
+						{
+							F_AdvanceIntermission();
+						}
+						
+					}
+					else if(mScrollTextTime == 0)
+					{
+						//F_AdvanceIntermission();
+						mNoSkip = false;
+						Run_mScrollTicker = false;	//[GEC]
+						mAlphaTicker = 0; // [GEC] Reset mAlphaTicker
+						Run_mAlphaTicker = false;
+					}
+				}
+
+				//mskip = true;
+				memcpy((char *)buffer, ch, mTextLen);
+				break;
+			}
+
+			memcpy((char *)buffer, ch, index);
+		}
+
+		if(mCenterText)
+		{
+			if(mTextResW != 0 && mTextResH != 0)
+			{
+				cx = (mTextResW - Font->StringWidth((const BYTE *)buffer,true))/2;//center
+			}
+			else
+			{
+				cx = ((320 - Font->StringWidth((const BYTE *)buffer,true))/2) * CleanXfac;//center
+			}
+		}
+
+		//for ( ; count > 0 ; count-- )
+		while((c = *buffer++))
+		{
+			/*c = *ch++;
+			if (!c)
+				break;*/
+			if (c == '\n')
+			{
+				cx = startx;
+				cy += rowheight;
+
+				
+				if(mCenterText)
+				{
+					if(mTextResW != 0 && mTextResH != 0)
+					{
+						cx = (mTextResW - Font->StringWidth((const BYTE *)buffer,true))/2;//center
+					}
+					else
+					{
+						cx = ((320 - Font->StringWidth((const BYTE *)buffer,true))/2) * CleanXfac;//center
+					}
+				}
+
+				if(mFadeText) alpha_index++;
+				continue;
+			}
+
+			pic = Font->GetChar (c, &w);
+			w += kerning;
+			if(mTextResW == 0 && mTextResH == 0){w *= CleanXfac;}
+
+			if ((cx + w > SCREENWIDTH) && !mCenterText)
+				continue;
+
+			if (pic != NULL)
+			{
+				if(mScrollText)
+				{
+					switch (mScrollTextDirection)
+					{
+					case SCROLL_Up:
+						scrolly = -scroll;
+						break;
+
+					case SCROLL_Down:
+						scrolly = +scroll;
+						break;
+
+					case SCROLL_Left:
+						scrollx = -scroll;
+						break;
+
+					case SCROLL_Right:
+						scrollx = +scroll;
+						break;
+					}
+				}
+
+				if(mTextResW != 0 && mTextResH != 0)
+				{
+					rx = (cx + scrollx);
+					ry = (cy + scrolly);
+					rw = pic->GetScaledWidthDouble();
+					rh = pic->GetScaledHeightDouble();
+
+					screen->VirtualToRealCoords(rx, ry, rw, rh, mTextResW, mTextResH, true);
+
+					screen->DrawTexture (pic,
+					rx,
+					ry,
+					DTA_DestWidthF, rw,
+					DTA_DestHeightF, rh, 
+					DTA_Translation, range,
+					DTA_Alpha, FLOAT2FIXED(FIXED2FLOAT(mAlpharows[alpha_index])/255.f),
+					DTA_RenderStyle, LegacyRenderStyles[mTextAdd ? STYLE_Add : STYLE_Translucent],
+					TAG_DONE);
+				}
+				else
+				{
+					screen->DrawTexture (pic,
+					cx + scrollx,
+					cy + scrolly,
+					DTA_Translation, range,
+					DTA_CleanNoMove, true,
+					DTA_Alpha, FLOAT2FIXED(FIXED2FLOAT(mAlpharows[alpha_index])/255.f),
+					DTA_RenderStyle, LegacyRenderStyles[mTextAdd ? STYLE_Add : STYLE_Translucent],
+					TAG_DONE);
+				}
+			}
+			cx += w;
+		}
+	}
+}
+// [GEC] El Viejo Codigo
+/*
 void DIntermissionScreenText::Drawer ()
 {
 	Super::Drawer();
@@ -397,7 +969,7 @@ void DIntermissionScreenText::Drawer ()
 			cx += w;
 		}
 	}
-}
+}*/
 
 //==========================================================================
 //
@@ -409,6 +981,27 @@ void DIntermissionScreenCast::Init(FIntermissionAction *desc, bool first)
 {
 	Super::Init(desc, first);
 	mName = static_cast<FIntermissionActionCast*>(desc)->mName;
+
+	mFontName = static_cast<FIntermissionActionCast*>(desc)->mFontName;//[GEC]
+	mYpos = static_cast<FIntermissionActionCast*>(desc)->mYpos;//[GEC]
+	mResW = static_cast<FIntermissionActionCast*>(desc)->mResW;//[GEC]
+	mResH = static_cast<FIntermissionActionCast*>(desc)->mResH;//[GEC]
+	mText = static_cast<FIntermissionActionCast*>(desc)->mText;//[GEC]
+	mYpos2 = static_cast<FIntermissionActionCast*>(desc)->mYpos2;//[GEC]
+	mXpos2 = static_cast<FIntermissionActionCast*>(desc)->mXpos2;//[GEC]
+	mShotSound = static_cast<FIntermissionActionCast*>(desc)->mShotSound;//[GEC]
+	mTextColor = static_cast<FIntermissionActionCast*>(desc)->mTextColor;//[GEC]
+
+	mcastrotationenable = static_cast<FIntermissionActionCast*>(desc)->mcastrotation;//[GEC]
+	mlightplus = static_cast<FIntermissionActionCast*>(desc)->mlightplus;//[GEC]
+	mlightmax = static_cast<FIntermissionActionCast*>(desc)->mlightmax;//[GEC]
+
+	mYposSprite = static_cast<FIntermissionActionCast*>(desc)->mYposSprite;//[GEC]
+	mCenterXSprite = static_cast<FIntermissionActionCast*>(desc)->mCenterXSprite;//[GEC]
+
+	mcastrotation = 0;//[GEC]
+	mcastlight = (mlightmax != 0 && mlightplus != 0) ? 0 : 255;//[GEC]
+
 	mClass = PClass::FindClass(static_cast<FIntermissionActionCast*>(desc)->mCastClass);
 	if (mClass != NULL) mDefaults = GetDefaultByType(mClass);
 	else
@@ -453,6 +1046,32 @@ void DIntermissionScreenCast::Init(FIntermissionAction *desc, bool first)
 
 int DIntermissionScreenCast::Responder (event_t *ev)
 {
+	if(ev->type == EV_KeyDown && mcastrotationenable)
+	{
+		int ch = ev->data1;
+		switch (ch)
+		{
+		case KEY_PAD_DPAD_LEFT:
+		case KEY_PAD_LTHUMB_LEFT:
+		case KEY_JOYAXIS2MINUS:
+		case KEY_JOYPOV1_LEFT:
+		case KEY_LEFTARROW:
+			mcastrotation = mcastrotation+2 & 15;
+			return 0;
+			break;
+
+		case KEY_PAD_DPAD_RIGHT:
+		case KEY_PAD_LTHUMB_RIGHT:
+		case KEY_JOYAXIS2PLUS:
+		case KEY_JOYPOV1_RIGHT:
+		case KEY_RIGHTARROW:
+			mcastrotation = mcastrotation-2 & 15;
+			return 0;
+			break;
+		}
+		//Printf("castrotation %d\n",castrotation);
+	}
+
 	if (ev->type != EV_KeyDown) return 0;
 
 	if (castdeath)
@@ -462,6 +1081,11 @@ int DIntermissionScreenCast::Responder (event_t *ev)
 
 	if (mClass != NULL)
 	{
+		if(mShotSound)//[GEC]
+		{
+			S_Sound (CHAN_WEAPON | CHAN_UI, mShotSound, 1, ATTN_NONE);
+		}
+
 		FName label[] = {NAME_Death, NAME_Cast};
 		caststate = mClass->ActorInfo->FindState(2, label);
 		if (caststate == NULL) return -1;
@@ -505,6 +1129,18 @@ void DIntermissionScreenCast::PlayAttackSound()
 int DIntermissionScreenCast::Ticker ()
 {
 	Super::Ticker();
+
+	if(mlightmax != 0 && mlightplus != 0)//[GEC]
+	{
+		mcastlight = mcastlight + mlightplus;
+
+		if(mcastlight >= mlightmax)
+		{
+			mcastlight = mlightmax;
+			mlightmax = 0;
+			mlightplus = 0;
+		}
+	}
 
 	if (--casttics > 0 && caststate != NULL)
 		return 0; 				// not time to change state yet
@@ -575,17 +1211,72 @@ void DIntermissionScreenCast::Drawer ()
 	spriteframe_t*		sprframe;
 	FTexture*			pic;
 
+	FFont * Font = SmallFont;//[GEC]
+	//Set New Font
+	const char *fontname = mFontName.GetChars();
+	Font = V_GetFont (fontname);
+	if (Font == NULL)
+		Font = SmallFont;
+
 	Super::Drawer();
 
 	const char *name = mName;
 	if (name != NULL)
 	{
 		if (*name == '$') name = GStrings(name+1);
-		screen->DrawText (SmallFont, CR_UNTRANSLATED,
-			(SCREENWIDTH - SmallFont->StringWidth (name) * CleanXfac)/2,
-			(SCREENHEIGHT * 180) / 200,
-			name,
-			DTA_CleanNoMove, true, TAG_DONE);
+
+		int X = (SCREENWIDTH - Font->StringWidth (name) * CleanXfac)/2;//[GEC]
+		int Y = (SCREENHEIGHT * 180) / 200;//[GEC]
+
+		if(mYpos != FRACUNIT)//[GEC]
+		{
+			if(mResW != 0 && mResH != 0 )
+			{
+				X = (mResW - Font->StringWidth (name))/2;
+				Y = mYpos;
+			}
+			else
+			{
+				Y = mYpos * CleanYfac;
+			}
+		}
+
+		if(mResW != 0 && mResH != 0 )//[GEC]
+		{
+			screen->DrawText (Font, mTextColor,
+				X,Y, name, DTA_ResWidthF, mResW, DTA_ResHeightF, mResH, TAG_DONE);
+		}
+		else
+		{
+			screen->DrawText (Font, mTextColor,
+				X,Y,name,DTA_CleanNoMove, true, TAG_DONE);
+		}
+	}
+
+	name = mText;
+	if (name != NULL)
+	{
+		if (*name == '$') name = GStrings(name+1);
+
+		int X = mXpos2 * CleanXfac;//[GEC]
+		int Y = mYpos2 * CleanYfac;//[GEC]
+
+		if(mResW != 0 && mResH != 0 )
+		{
+			X = mXpos2;
+			Y = mYpos2;
+		}
+
+		if(mResW != 0 && mResH != 0 )//[GEC]
+		{
+			screen->DrawText (Font, CR_UNTRANSLATED,
+				X,Y, name, DTA_ResWidthF, mResW, DTA_ResHeightF, mResH, TAG_DONE);
+		}
+		else
+		{
+			screen->DrawText (Font, CR_UNTRANSLATED,
+				X,Y,name,DTA_CleanNoMove, true, TAG_DONE);
+		}
 	}
 
 	// draw the current frame in the middle of the screen
@@ -593,6 +1284,7 @@ void DIntermissionScreenCast::Drawer ()
 	{
 		double castscalex = FIXED2DBL(mDefaults->scaleX);
 		double castscaley = FIXED2DBL(mDefaults->scaleY);
+		double rx, ry, rw, rh, offsetx;//[GEC]
 
 		int castsprite = caststate->sprite;
 
@@ -615,23 +1307,73 @@ void DIntermissionScreenCast::Drawer ()
 						castscaley = FIXED2DBL(skin->ScaleY);
 						castscalex = FIXED2DBL(skin->ScaleX);
 					}
-
 				}
 			}
 		}
 
 		sprframe = &SpriteFrames[sprites[castsprite].spriteframes + caststate->GetFrame()];
-		pic = TexMan(sprframe->Texture[0]);
+		pic = TexMan(sprframe->Texture[mcastrotation]);
 
-		screen->DrawTexture (pic, 160, 170,
-			DTA_320x200, true,
-			DTA_FlipX, sprframe->Flip & 1,
-			DTA_DestHeightF, pic->GetScaledHeightDouble() * castscaley,
-			DTA_DestWidthF, pic->GetScaledWidthDouble() * castscalex,
-			DTA_RenderStyle, mDefaults->RenderStyle,
-			DTA_Alpha, mDefaults->alpha,
-			DTA_Translation, casttranslation,
-			TAG_DONE);
+		int Flip = (int)(sprframe->Flip & (1 << mcastrotation));//[GEC]
+		int X = 160;//[GEC]
+		int Y = 170;//[GEC]
+
+		if(mYposSprite != FRACUNIT)//[GEC]
+		{
+			if(mResW != 0 && mResH != 0 )
+			{
+				X = (mResW)/2;
+				Y = mYposSprite;
+			}
+			else
+			{
+				Y = mYpos;
+			}
+		}
+
+		if(mResW != 0 && mResH != 0 )//[GEC]
+		{
+			rx = (double) X;
+			ry = (double) Y;
+			rw = (double) pic->GetScaledWidthDouble() * castscalex;
+			rh = (double) pic->GetScaledHeightDouble() * castscaley;
+			offsetx = (double) pic->GetScaledLeftOffsetDouble() * castscalex;
+			if(mCenterXSprite) rx = (double) Flip ? (X + offsetx) - rw : X - offsetx;
+
+			screen->VirtualToRealCoords(rx, ry, rw, rh, mResW, mResH, false);
+
+			screen->DrawTexture (pic,
+				rx,
+				ry,
+				DTA_DestWidthF, rw,
+				DTA_DestHeightF, rh, 
+				DTA_FlipX, Flip,
+				DTA_LeftOffsetF, mCenterXSprite ? 0 : offsetx,
+				DTA_RenderStyle, mDefaults->RenderStyle,
+				DTA_Alpha, mDefaults->alpha,
+				DTA_Translation, casttranslation,
+				DTA_GLCOLOR,MAKERGB(mcastlight,mcastlight,mcastlight),
+				TAG_DONE);
+		}
+		else
+		{
+			rx = (double) X;
+			rw = (double) pic->GetScaledWidthDouble() * castscalex;
+			offsetx = (double) pic->GetScaledLeftOffsetDouble() * castscalex;
+			if(mCenterXSprite) rx = (double) Flip ? (X + offsetx) - rw : X - offsetx;
+
+			screen->DrawTexture (pic, rx, Y,
+				DTA_320x200, true,
+				DTA_FlipX, Flip,
+				DTA_LeftOffsetF, mCenterXSprite ? 0 : offsetx,//[GEC]
+				DTA_DestHeightF, pic->GetScaledHeightDouble() * castscaley,
+				DTA_DestWidthF, pic->GetScaledWidthDouble() * castscalex,
+				DTA_RenderStyle, mDefaults->RenderStyle,
+				DTA_Alpha, mDefaults->alpha,
+				DTA_Translation, casttranslation,
+				DTA_GLCOLOR,MAKERGB(mcastlight,mcastlight,mcastlight),
+				TAG_DONE);
+		}
 	}
 }
 
@@ -745,6 +1487,12 @@ DIntermissionController::DIntermissionController(FIntermissionDescriptor *Desc, 
 
 bool DIntermissionController::NextPage ()
 {
+	mPicResW = 0;//[GEC]
+	mPicResH = 0;//[GEC]
+	mPicX = 0;//[GEC]
+	mPicY = 0;//[GEC]
+	mWipeOut = GS_FINALE;//[GEC]
+
 	FTextureID bg;
 	bool fill = false;
 
@@ -763,6 +1511,7 @@ again:
 	while ((unsigned)mIndex < mDesc->mActions.Size())
 	{
 		FIntermissionAction *action = mDesc->mActions[mIndex++];
+
 		if (action->mClass == WIPER_ID)
 		{
 			wipegamestate = static_cast<FIntermissionActionWiper*>(action)->mWipeType;
@@ -770,7 +1519,7 @@ again:
 		else if (action->mClass == TITLE_ID)
 		{
 			Destroy();
-			D_StartTitle ();
+			D_StartTitle (true);//[GEC]
 			return false;
 		}
 		else
@@ -875,6 +1624,12 @@ void DIntermissionController::Drawer ()
 
 void DIntermissionController::Destroy ()
 {
+	mPicResW = 0;//[GEC]
+	mPicResH = 0;//[GEC]
+	mPicX = 0;//[GEC]
+	mPicY = 0;//[GEC]
+	mWipeOut = GS_FINALE;//[GEC]
+
 	Super::Destroy();
 	if (mScreen != NULL) mScreen->Destroy();
 	if (mDeleteDesc) delete mDesc;
@@ -895,6 +1650,12 @@ void F_StartIntermission(FIntermissionDescriptor *desc, bool deleteme, BYTE stat
 	{
 		DIntermissionController::CurrentIntermission->Destroy();
 	}
+
+	mPicResW = 0;//[GEC]
+	mPicResH = 0;//[GEC]
+	mPicX = 0;//[GEC]
+	mPicY = 0;//[GEC]
+
 	V_SetBlend (0,0,0,0);
 	S_StopAllChannels ();
 	gameaction = ga_nothing;

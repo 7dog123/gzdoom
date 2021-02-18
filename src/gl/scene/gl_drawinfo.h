@@ -48,6 +48,8 @@ enum Drawpasses
 	GLPASS_DECALS,		// Draws a decal
 	GLPASS_DECALS_NOFOG,// Draws a decal without setting the fog (used for passes that need a fog layer)
 	GLPASS_TRANSLUCENT,	// Draws translucent objects
+	GLPASS_TEXBlEND,	// [GEC] Blend
+	//GLPASS_LIGH_PSX,	// [GEC] RenderLightPSX
 	GLPASS_ALL			// Everything at once, using shaders for dynamic lights
 };
 

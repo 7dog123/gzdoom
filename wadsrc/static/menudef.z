@@ -67,6 +67,7 @@ OptionValue "LightingModes"
 	3, "Dark"
 	4, "Legacy"
 	8, "Software"
+	16, "PSXSoftware" //[GEC]
 }
 
 OptionValue "Precision"
@@ -143,6 +144,13 @@ OptionValue VRMode
 	6, "Right Eye"
 }
 
+OptionValue BlendTypes //[GEC]
+{
+	0, "ZDoom"
+	1, "Doom PSX"
+	2, "Doom 64"
+}
+
 OptionMenu "GLTextureGLOptions"
 {
 	Title "TEXTURE OPTIONS"
@@ -175,6 +183,14 @@ OptionMenu "GLLightOptions"
 	Option "Use shaders for lights",	gl_dynlight_shader,				"YesNo"
 }
 
+OptionValue "ShaderModes" //[GEC] Experimental??
+{
+	0, "Default System"
+	2, "SM2"
+	3, "SM3"
+	4, "SM4"
+}
+
 OptionMenu "GLPrefOptions"
 {
 	Title "OPENGL PREFERENCES"
@@ -195,6 +211,15 @@ OptionMenu "GLPrefOptions"
 	Option "Rendering quality",			gl_render_precise,				"Precision"
 	Option "Use vertex buffer",			gl_usevbo,						"VBOModes"
 	Option "Stereo 3D VR",				vr_mode, 						"VRMode"
+	//[GEC]
+	StaticText " "
+	
+	Option "Shader Model",				"gl_shadermodel", 				"ShaderModes"
+	Option "Blend Combine",		blendcombine,				"OnOff"
+	Option "Blend type",				"blend_type",					"BlendTypes"
+	Option "Banded SW Lightmode",		gl_bandedswlight,				"OnOff"
+	Option "PSX Color (Shader only)",	gl_psxcolor,						"OnOff"
+	Slider "D64 Brightness",			gl_d64brightness,				0.0, 100.0, 2.0
 }
 
 OptionMenu "GLShaderOptions"

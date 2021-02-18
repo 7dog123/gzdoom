@@ -35,6 +35,9 @@
 
 extern gamestate_t wipegamestate;
 
+#include "gl/scene/gl_skynew.h"//[GEC]
+#include "a_keys.h"//[GEC]
+
 //==========================================================================
 //
 // P_CheckTickerPaused
@@ -62,6 +65,11 @@ bool P_CheckTickerPaused ()
 	}
 	return false;
 }
+
+fixed_t scrollfrac;//[GEC] [D64] for the interpolated water flats
+int lightfactor;//[GEC] FadeInBrightness
+int infraredFactor;//[GEC] InfraredFactor
+//extern int infraredFactor;//[GEC]
 
 //
 // P_Ticker
@@ -127,11 +135,31 @@ void P_Ticker (void)
 	level.Tick ();			// [RH] let the level tick
 	DThinker::RunThinkers ();
 
+	R_SkyTicker();//[GEC]SKY tick
+	R_KeyTicker();//[GEC]KEY tick
+
+	scrollfrac += (FRACUNIT / 2);//[GEC] water scroll
+
 	//if added by MC: Freeze mode.
 	if (!bglobal.freeze && !(level.flags2 & LEVEL2_FROZEN))
 	{
 		P_UpdateSpecials ();
 		P_RunEffects ();	// [RH] Run particle effects
+	}
+
+	if(level.FadeInBrightness)//[GEC] FadeInBrightness
+	{
+		lightfactor += 2;
+		R_FadeInBrightness();
+	}
+
+	if (!(players[consoleplayer].mo->FindInventory (RUNTIME_CLASS(APowerD64LightAmp))))//[GEC] InfraredFactor
+	{
+		if(infraredFactor)
+		{
+            infraredFactor -= 4;
+            R_RefreshBrightness();
+        }
 	}
 
 	// for par times

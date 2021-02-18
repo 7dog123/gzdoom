@@ -103,6 +103,9 @@ private:
 	class Wiper_Melt;			friend class Wiper_Melt;
 	class Wiper_Burn;			friend class Wiper_Burn;
 	class Wiper_Crossfade;		friend class Wiper_Crossfade;
+	class Wiper_Melt64;			friend class Wiper_Melt64;//[GEC]
+	class Wiper_FadeScreen;		friend class Wiper_FadeScreen;//[GEC]
+	class Wiper_LoadingScreen;	friend class Wiper_LoadingScreen;//[GEC]
 
 	Wiper *ScreenWipe;
 	FHardwareTexture *wipestartscreen;

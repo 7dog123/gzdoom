@@ -184,6 +184,14 @@ public:
 	FString Name;
 	BYTE UseType;	// This texture's primary purpose
 
+	//[GEC]
+	BYTE bNoPuffMiddle:1;
+	BYTE bNoPuffTop:1;
+	BYTE bNoPuffBottom:1;
+	BYTE bNoProjectileMiddle:1;
+	BYTE bNoProjectileTop:1;
+	BYTE bNoProjectileBottom:1;
+
 	BYTE bNoDecals:1;		// Decals should not stick to texture
 	BYTE bNoRemap0:1;		// Do not remap color 0 (used by front layer of parallax skies)
 	BYTE bWorldPanning:1;	// Texture is panned in world units rather than texels
@@ -431,7 +439,8 @@ public:
 		TEXMAN_ReturnFirst = 4,
 		TEXMAN_AllowSkins = 8,
 		TEXMAN_ShortNameOnly = 16,
-		TEXMAN_DontCreate = 32
+		TEXMAN_DontCreate = 32,
+		TEXMAN_DontMessage = 64 //[GEC]
 	};
 
 	enum
@@ -485,6 +494,7 @@ public:
 	int ReadTexture (FArchive &arc);
 
 	void UpdateAnimations (DWORD mstime);
+	void ResetAnimations ();//[GEC]
 	int GuesstimateNumTextures ();
 
 	FSwitchDef *FindSwitch (FTextureID texture);

@@ -66,10 +66,12 @@ struct Lock
 	FString Message;
 	FString RemoteMsg;
 	int	rgb;
+	bool flashkey;//[GEC]
 
 	Lock()
 	{
 		rgb=0;
+		flashkey = false;//[GEC]
 	}
 
 	~Lock()
@@ -114,6 +116,7 @@ static const char * keywords_lock[]={
 	"REMOTEMESSAGE",
 	"MAPCOLOR",
 	"LOCKEDSOUND",
+	"FLASHKEY",//[GEC]
 	NULL
 };
 
@@ -291,6 +294,10 @@ static void ParseLock(FScanner &sc)
 			}
 			break;
 
+		case 5:	// [GEC] flashcount
+			lock->flashkey = true;
+			break;
+
 		default:
 			mi = PClass::FindClass(sc.String);
 			if (mi) 
@@ -401,6 +408,57 @@ void P_DeinitKeyMessages()
 
 //===========================================================================
 //
+// [GEC] Tried to open a CARD or SKULL door?
+//
+//===========================================================================
+
+#define FLASHDELAY      8       /* # of tics delay (1/30 sec) */
+#define FLASHTIMES      6       /* # of times to flash new frag amount (EVEN!) */
+
+struct keyflash_t flashCards[255];
+
+void R_KeyTicker(void) 
+{
+	int ind = 0;
+
+	for(ind = 0; ind < 255; ind++)
+	{
+		if(flashCards[ind].tryopen) 
+		{
+			flashCards[ind].tryopen = false;
+			flashCards[ind].keynum = flashCards[ind].keynum;
+			flashCards[ind].active = true;
+			flashCards[ind].delay = FLASHDELAY;
+			flashCards[ind].times = FLASHTIMES+1;
+			flashCards[ind].doDraw = false;
+		}
+
+		/* MIGHT AS WELL DO TICKING IN THE SAME LOOP! */
+		if(flashCards[ind].active && !--flashCards[ind].delay) 
+		{
+			flashCards[ind].delay = FLASHDELAY;
+			flashCards[ind].doDraw ^= 1;
+
+			if(!--flashCards[ind].times) 
+			{
+				flashCards[ind].tryopen = false;
+				flashCards[ind].keynum = 0;
+				flashCards[ind].active = false;
+				flashCards[ind].delay = 0;
+				flashCards[ind].times = 0;
+				flashCards[ind].doDraw = false;
+			}
+
+			if(flashCards[ind].doDraw && flashCards[ind].active) 
+			{
+				S_Sound(CHAN_VOICE, "misc/keysnd", 1, ATTN_NORM);
+			}
+		}
+	}
+}
+
+//===========================================================================
+//
 // P_CheckKeys
 //
 // Returns true if the actor has the required key. If not, a message is
@@ -414,6 +472,7 @@ bool P_CheckKeys (AActor *owner, int keynum, bool remote)
 	const char *failtext = NULL;
 	FSoundID *failsound;
 	int numfailsounds;
+	bool FlashKey = false;//[GEC]
 
 	if (owner == NULL) return false;
 	if (keynum<=0 || keynum>255) return true;
@@ -438,6 +497,7 @@ bool P_CheckKeys (AActor *owner, int keynum, bool remote)
 		failtext = remote? locks[keynum]->RemoteMsg : locks[keynum]->Message;
 		failsound = &locks[keynum]->locksound[0];
 		numfailsounds = locks[keynum]->locksound.Size();
+		FlashKey = locks[keynum]->flashkey;//[GEC]
 	}
 
 	// If we get here, that means the actor isn't holding an appropriate key.
@@ -455,6 +515,12 @@ bool P_CheckKeys (AActor *owner, int keynum, bool remote)
 				if (snd != 0)
 				{
 					S_Sound (owner, CHAN_VOICE, snd, 1, ATTN_NORM);
+
+					if(FlashKey)
+					{
+						flashCards[keynum].keynum = keynum;//[GEC]
+						flashCards[keynum].tryopen = true;
+					}
 					break;
 				}
 			}

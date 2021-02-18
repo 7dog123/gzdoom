@@ -27,3 +27,5 @@
 #include "doomdef.h"
 
 // Location for any defines turned variables.
+
+fixed_t FRICTION_BASE[3]; //[GEC]

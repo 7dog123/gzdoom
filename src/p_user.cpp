@@ -311,7 +311,10 @@ player_t::player_t()
   ConversationNPC(0),
   ConversationPC(0),
   ConversationNPCAngle(0),
-  ConversationFaceTalker(0)
+  ConversationFaceTalker(0),
+  secdamage(0),//[GEC]
+  bfgcolor(0),//[GEC]
+  bfgticdown(0)//[GEC]
 {
 	memset (&cmd, 0, sizeof(cmd));
 	memset (frags, 0, sizeof(frags));
@@ -406,6 +409,9 @@ player_t &player_t::operator=(const player_t &p)
 	ConversationFaceTalker = p.ConversationFaceTalker;
 	MUSINFOactor = p.MUSINFOactor;
 	MUSINFOtics = p.MUSINFOtics;
+	secdamage = p.secdamage;//[GEC]
+	bfgcolor = p.bfgcolor;//[GEC]
+	bfgticdown = p.bfgticdown;//[GEC]
 	return *this;
 }
 
@@ -571,6 +577,10 @@ void APlayerPawn::Serialize (FArchive &arc)
 	if (SaveVersion >= 4526)
 	{
 		arc << ViewHeight;
+	}
+	if (SaveVersion >= 4527)//[GEC]
+	{
+		arc << LandingSpeed << MoveBob;
 	}
 }
 
@@ -1342,7 +1352,7 @@ void APlayerPawn::Die (AActor *source, AActor *inflictor, int dmgflags)
 {
 	Super::Die (source, inflictor, dmgflags);
 
-	if (player != NULL && player->mo == this) player->bonuscount = 0;
+	if (player != NULL && player->mo == this) {player->bonuscount = 0;}
 
 	if (player != NULL && player->mo != this)
 	{ // Make the real player die, too
@@ -1429,7 +1439,6 @@ void APlayerPawn::TweakSpeeds (int &forward, int &side)
 		side = clamp(side, -0x1800, 0x1800);
 	}
 
-	// [GRB]
 	if ((unsigned int)(forward + 0x31ff) < 0x63ff)
 	{
 		forward = FixedMul (forward, ForwardMove1);
@@ -1453,6 +1462,9 @@ void APlayerPawn::TweakSpeeds (int &forward, int &side)
 		forward = FixedMul(forward, factor);
 		side = FixedMul(side, factor);
 	}
+
+	//Printf("forward %x\n",forward);
+	//Printf("side %x\n",side);
 }
 
 //===========================================================================
@@ -1659,6 +1671,7 @@ void P_SideThrust (player_t *player, angle_t angle, fixed_t move)
 {
 	angle = (angle - ANGLE_90) >> ANGLETOFINESHIFT;
 
+	//Printf("cmd->ucmd.sidemove %X %f\n",move , FIXED2FLOAT(move));
 	player->mo->velx += FixedMul (move, finecosine[angle]);
 	player->mo->vely += FixedMul (move, finesine[angle]);
 }
@@ -1677,6 +1690,7 @@ void P_ForwardThrust (player_t *player, angle_t angle, fixed_t move)
 		player->mo->velz -= zpush;
 		move = FixedMul (move, finecosine[pitch]);
 	}
+	//Printf("cmd->ucmd.forwardmove %X %f\n",move , FIXED2FLOAT(move));
 	player->mo->velx += FixedMul (move, finecosine[angle]);
 	player->mo->vely += FixedMul (move, finesine[angle]);
 }
@@ -1751,7 +1765,15 @@ void P_CalcHeight (player_t *player)
 		}
 		else
 		{
-			player->bob = FixedMul (player->bob, player->userinfo.GetMoveBob());
+			if(player->mo->MoveBob_ == true)//[GEC]Player Move Bob "NO CVAR"
+			{
+				player->bob = FixedMul (player->bob, player->mo->MoveBob);
+			}
+			else
+			{
+				player->bob = FixedMul (player->bob, player->userinfo.GetMoveBob());
+			}
+			//player->bob = FixedMul (player->bob, player->userinfo.GetMoveBob());
 
 			if (player->bob > MAXBOB)
 				player->bob = MAXBOB;
@@ -1874,6 +1896,12 @@ void P_MovePlayer (player_t *player)
 
 	if (cmd->ucmd.forwardmove | cmd->ucmd.sidemove)
 	{
+		if((player->mo->PlayerFlags & PPF_MOVEONLYONGROUND) && 
+		!(player->mo->flags & MF_NOGRAVITY | player->mo->flags2 & MF2_FLY))//[GEC]
+		{
+			if(!player->onground) return;
+		}
+
 		fixed_t forwardmove, sidemove;
 		int bobfactor;
 		int friction, movefactor;
@@ -1893,6 +1921,8 @@ void P_MovePlayer (player_t *player)
 		mo->TweakSpeeds (fm, sm);
 		fm = FixedMul (fm, player->mo->Speed);
 		sm = FixedMul (sm, player->mo->Speed);
+		//Printf("fm %x\n",fm);
+		//Printf("sm %x\n",sm);
 
 		// When crouching, speed and bobbing have to be reduced
 		if (player->CanCrouch() && player->crouchfactor != FRACUNIT)
@@ -1902,8 +1932,15 @@ void P_MovePlayer (player_t *player)
 			bobfactor = FixedMul(bobfactor, player->crouchfactor);
 		}
 
-		forwardmove = Scale (fm, movefactor * 35, TICRATE << 8);
-		sidemove = Scale (sm, movefactor * 35, TICRATE << 8);
+		//forwardmove = Scale (fm, movefactor * 35, TICRATE << 8);
+		//sidemove = Scale (sm, movefactor * 35, TICRATE << 8);
+
+		//Printf("movefactor %d ORIG_FRICTION %x FRICTION_LOW %x FRICTION_FLY %x\n",movefactor, ORIG_FRICTION, FRICTION_LOW, FRICTION_FLY);
+		//Printf("gameinfo.scalefriction %f\n",gameinfo.scalefriction);
+
+		forwardmove = Scale (fm, movefactor * TICRATE, TICRATE << 8);
+		sidemove = Scale (sm, movefactor * TICRATE, TICRATE << 8);
+		//Printf("forwardmove %x\n",forwardmove);
 
 		if (forwardmove)
 		{
@@ -2130,6 +2167,11 @@ void P_DeathThink (player_t *player)
 		{
 			player->poisoncount--;
 		}
+
+		if (player->bfgticdown)//[GEC]
+		{
+			player->bfgticdown -= 6;
+		}
 	}		
 
 	if ((player->cmd.ucmd.buttons & BT_USE ||
@@ -2137,11 +2179,14 @@ void P_DeathThink (player_t *player)
 	{
 		if (level.time >= player->respawn_time || ((player->cmd.ucmd.buttons & BT_USE) && player->Bot == NULL))
 		{
-			player->cls = NULL;		// Force a new class if the player is using a random class
-			player->playerstate = (multiplayer || (level.flags2 & LEVEL2_ALLOWRESPAWN)) ? PST_REBORN : PST_ENTER;
-			if (player->mo->special1 > 2)
+			if(player->viewheight <= 8*FRACUNIT)// [GEC] Desde Doom Atari Jaguar
 			{
-				player->mo->special1 = 0;
+				player->cls = NULL;		// Force a new class if the player is using a random class
+				player->playerstate = (multiplayer || (level.flags2 & LEVEL2_ALLOWRESPAWN)) ? PST_REBORN : PST_ENTER;
+				if (player->mo->special1 > 2)
+				{
+					player->mo->special1 = 0;
+				}
 			}
 		}
 	}
@@ -2482,7 +2527,8 @@ void P_PlayerThink (player_t *player)
 			}
 			else if (level.IsJumpingAllowed() && player->onground && player->jumpTics == 0)
 			{
-				fixed_t jumpvelz = player->mo->JumpZ * 35 / TICRATE;
+				//fixed_t jumpvelz = player->mo->JumpZ * 35 / TICRATE;
+				fixed_t jumpvelz = player->mo->JumpZ * TICRATE / TICRATE;
 
 				// [BC] If the player has the high jump power, double his jump velocity.
 				if ( player->cheats & CF_HIGHJUMP )	jumpvelz *= 2;
@@ -2595,6 +2641,11 @@ void P_PlayerThink (player_t *player)
 
 		if (player->bonuscount)
 			player->bonuscount--;
+
+		if (player->bfgticdown)//[GEC]
+		{
+			player->bfgticdown -= 6;
+		}
 
 		if (player->hazardcount)
 		{
@@ -3160,6 +3211,8 @@ void player_t::Serialize (FArchive &arc)
 	{
 		arc << MUSINFOactor << MUSINFOtics;
 	}
+
+	arc << secdamage << bfgcolor << bfgticdown;//[GEC]
 }
 
 

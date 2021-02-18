@@ -577,6 +577,18 @@ class CommandDrawSwitchableImage : public CommandDrawImage
 					}
 				}
 
+				for(int ind = 0; ind < 255; ind++)// [GEC] DRAW KEYS IMAGE FLASH
+				{
+					int keynum2 = flashCards[ind].keynum;
+					if(keynum2 && flashCards[ind].doDraw)
+					{
+						if(keynum2 == conditionalValue[0])
+							found1 = true;
+						if(conditionAnd && keynum2 == conditionalValue[1]) // two keys
+							found2 = true;
+					}
+				}
+
 				if(conditionAnd)
 				{
 					if(found1 && found2)

@@ -51,6 +51,8 @@
 #define NO_IMP
 #include "menu/optionmenuitems.h"
 
+extern int MenuAlpha; //[GEC]
+
 class DColorPickerMenu : public DOptionMenu
 {
 	DECLARE_CLASS(DColorPickerMenu, DOptionMenu)
@@ -325,9 +327,9 @@ public:
 
 		y += 49*CleanYfac_1;
 		screen->DrawText (SmallFont, CR_GRAY, x+(24-SmallFont->StringWidth("Old")/2)*CleanXfac_1, y,
-			"Old", DTA_CleanNoMove_1, true, TAG_DONE);
+			"Old", DTA_CleanNoMove_1, true, DTA_Alpha, MenuAlpha, TAG_DONE);//[GEC]
 		screen->DrawText (SmallFont, CR_WHITE, x+(48+24-SmallFont->StringWidth("New")/2)*CleanXfac_1, y,
-			"New", DTA_CleanNoMove_1, true, TAG_DONE);
+			"New", DTA_CleanNoMove_1, true, DTA_Alpha, MenuAlpha, TAG_DONE);//[GEC]
 	}
 };
 

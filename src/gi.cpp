@@ -201,6 +201,47 @@ const char* GameInfoBorders[] =
 
 void FMapInfoParser::ParseGameInfo()
 {
+	struct WipeType
+	{
+		const char *Name;
+		gamestate_t Type;
+	}
+	const FT[] = {
+		{ "Crossfade", GS_FORCEWIPEFADE },
+		{ "Melt", GS_FORCEWIPEMELT },
+		{ "Burn", GS_FORCEWIPEBURN },
+		{ "Default", GS_FORCEWIPE },
+		{ "Melt64", GS_FORCEWIPEMELT64 },//[GEC]
+		{ "FadeScreen", GS_FORCEWIPEFADESCREEN  },//[GEC]
+		{ "LoadingScreen", GS_FORCEWIPELOADINGSCREEN  },//[GEC]
+		{ "NullWipe", GS_FORCEWIPENONE  },//[GEC]
+		{ NULL, GS_DEMOSCREEN }//GS_FORCEWIPE }
+	};
+
+	struct AngleType//[GEC]
+	{
+		const char *Name;
+		int Type;
+	}
+
+	const AT[] = {//[GEC]
+		{ "DoomPc", 0 },
+		{ "DoomPsx", 1 },
+		{ "Doom64", 2 },
+		{ NULL, 0 }
+	};
+
+	struct SystemMode//[GEC]
+	{
+		const char *Name;
+		int Type;
+	}
+	const SM[] = {//[GEC]
+		{ "DoomPsx", 1 },
+		{ "Doom64", 2 },
+		{ NULL, 0 }
+	};
+
 	sc.MustGetToken('{');
 	while(sc.GetToken())
 	{
@@ -289,6 +330,69 @@ void FMapInfoParser::ParseGameInfo()
 			}
 			else gameinfo.mCheatMapArrow = "";
 		}
+		else if(nextKey.CompareNoCase("stargamewipe") == 0)//[GEC]
+		{
+			sc.MustGetToken(TK_Identifier);
+			int v = sc.MatchString(&FT[0].Name, sizeof(FT[0]));
+
+			if (v != -1) gameinfo.mStartWipe = FT[v].Type;
+			else gameinfo.mStartWipe = GS_DEMOSCREEN;
+		}
+		else if(nextKey.CompareNoCase("mapwipe") == 0)//[GEC]
+		{
+			sc.MustGetToken(TK_Identifier);
+			int v = sc.MatchString(&FT[0].Name, sizeof(FT[0]));
+
+			if (v != -1) gameinfo.mMapWipe = FT[v].Type;
+			else gameinfo.mMapWipe = GS_DEMOSCREEN;
+		}
+		else if(nextKey.CompareNoCase("scalefriction") == 0)//[GEC]
+		{
+			sc.MustGetToken(TK_FloatConst);
+			gameinfo.scalefriction = (float)sc.Float;
+
+			if (gameinfo.scalefriction < 0) gameinfo.scalefriction = 0.0;
+		}
+		else if(nextKey.CompareNoCase("playeranglemode") == 0)//[GEC]
+		{
+			sc.MustGetToken(TK_Identifier);
+			int v = sc.MatchString(&AT[0].Name, sizeof(AT[0]));
+
+			if (v != -1) gameinfo.playeranglemode = AT[v].Type;
+			else gameinfo.playeranglemode = 0;
+		}
+		else if(nextKey.CompareNoCase("playerblendsystem") == 0)//[GEC]
+		{
+			sc.MustGetToken(TK_Identifier);
+			int v = sc.MatchString(&SM[0].Name, sizeof(SM[0]));
+
+			if (v != -1) gameinfo.playerblendsystem = SM[v].Type;
+			else gameinfo.playerblendsystem = 0;
+		}
+		else if(nextKey.CompareNoCase("menubackimage") == 0)//[GEC]
+		{
+			sc.MustGetToken(TK_StringConst);
+			gameinfo.mBackImage = sc.String;
+
+			gameinfo.mBackResW = 320;
+			gameinfo.mBackResH = 200;
+
+			if (sc.CheckToken(','))
+			{
+				sc.MustGetToken(TK_IntConst);
+				gameinfo.mBackResW = sc.Number;
+			}
+
+			if (sc.CheckToken(','))
+			{
+				sc.MustGetToken(TK_IntConst);
+				gameinfo.mBackResH = sc.Number;
+			}
+		}
+		GAMEINFOKEY_BOOL(ticrate30, "ticrate30")//[GEC]
+		GAMEINFOKEY_BOOL(telefogbyheight, "telefogbyheight")//[GEC]
+		GAMEINFOKEY_BOOL(teleportcheckheight, "teleportcheckheight")//[GEC]
+
 		// Insert valid keys here.
 		GAMEINFOKEY_STRING(mCheatKey, "cheatKey")
 		GAMEINFOKEY_STRING(mEasyKey, "easyKey")

@@ -55,6 +55,7 @@
 #include "gl/scene/gl_portal.h"
 #include "gl/shaders/gl_shader.h"
 #include "gl/textures/gl_material.h"
+#include "gl/system/gl_interface.h"
 
 
 //==========================================================================
@@ -154,17 +155,35 @@ static int gl_SetSpriteLight(AActor *self, fixed_t x, fixed_t y, fixed_t z, subs
 
 	gl_GetLightColor(lightlevel, rellight, cm, &r, &g, &b, weapon);
 	bool res = gl_GetSpriteLight(self, x, y, z, subsec, cm? cm->colormap : 0, result);
-	if (!res || glset.lightmode == 8)
+	if (!res || glset.lightmode == 8 || glset.lightmode == 16)//[GEC]
 	{
 		r *= ThingColor.r/255.f;
 		g *= ThingColor.g/255.f;
 		b *= ThingColor.b/255.f;
 		glColor4f(r, g, b, alpha);
-		if (glset.lightmode == 8) 
+
+		if (glset.lightmode == 8 || glset.lightmode == 16)//[GEC]
 		{
 			glVertexAttrib1f(VATTR_LIGHTLEVEL, gl_CalcLightLevel(lightlevel, rellight, weapon) / 255.0f); // Korshun.
 			gl_RenderState.SetDynLight(result[0], result[1], result[2]);
+
+			if (glset.lightmode == 16)//[GEC]
+			{
+				r = clamp<float>(result[0]+r, 0, 1.0f);
+				g = clamp<float>(result[1]+g, 0, 1.0f);
+				b = clamp<float>(result[2]+b, 0, 1.0f);
+
+				float dlightlevel = r*77 + g*143 + b*35;
+
+				r *= ThingColor.r/255.f;
+				g *= ThingColor.g/255.f;
+				b *= ThingColor.b/255.f;
+
+				glColor4f(r, g, b, alpha);		
+			}
 		}
+
+		gl_RenderState.SetFragColor(r, g, b, alpha);//[GEC]
 		return lightlevel;
 	}
 	else
@@ -204,7 +223,7 @@ int gl_SetSpriteLight(AActor * thing, int lightlevel, int rellight, FColormap * 
 					  lightlevel, rellight, cm, alpha, ThingColor, weapon);
 }
 
-int gl_SetSpriteLight(particle_t * thing, int lightlevel, int rellight, FColormap *cm, float alpha, PalEntry ThingColor)
+int gl_SetSpriteLight(particle_t * thing, int lightlevel, int rellight, FColormap *cm, float alpha, PalEntry ThingColor)//[GEC]
 { 
 	return gl_SetSpriteLight(NULL, thing->x, thing->y, thing->z, thing->subsector, lightlevel, rellight, 
 					  cm, alpha, ThingColor, false);
@@ -285,6 +304,8 @@ int gl_SetSpriteLighting(FRenderStyle style, AActor *thing, int lightlevel, int 
 	{
 		glColor4f(0.2f * ThingColor.r / 255.f, 0.2f * ThingColor.g / 255.f, 
 					0.2f * ThingColor.b / 255.f, (alpha = 0.33f));
+
+		//gl_RenderState.SetFragColor(0.2f * ThingColor.r / 255.f, 0.2f * ThingColor.g / 255.f, 0.2f * ThingColor.b / 255.f);//[GEC]
 	}
 	else
 	{
@@ -294,7 +315,7 @@ int gl_SetSpriteLighting(FRenderStyle style, AActor *thing, int lightlevel, int 
 		}
 		else
 		{
-			gl_SetColor(lightlevel, rellight, cm, alpha, ThingColor, weapon);
+			gl_SetColor(lightlevel, rellight, cm, alpha, ThingColor, weapon, fullbright);//[GEC]
 		}
 	}
 	gl_RenderState.AlphaFunc(GL_GEQUAL,alpha*gl_mask_sprite_threshold);

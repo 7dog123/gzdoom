@@ -47,7 +47,7 @@
 #include "gi.h"
 #include "d_gui.h"
 
-
+extern int MenuAlpha; //[GEC]
 
 
 class DLoadSaveMenu : public DListMenu
@@ -565,8 +565,7 @@ void DLoadSaveMenu::Drawer ()
 		screen->DrawTexture(SavePic, savepicLeft, savepicTop,
 			DTA_DestWidth, savepicWidth,
 			DTA_DestHeight, savepicHeight,
-			DTA_Masked, false,
-			TAG_DONE);
+			DTA_Masked, false, TAG_DONE);
 	}
 	else
 	{
@@ -582,7 +581,7 @@ void DLoadSaveMenu::Drawer ()
 
 			screen->DrawText (SmallFont, CR_GOLD, savepicLeft+(savepicWidth-textlen)/2,
 				savepicTop+(savepicHeight-rowHeight)/2, text,
-				DTA_CleanNoMove, true, TAG_DONE);
+				DTA_CleanNoMove, true, DTA_Alpha, MenuAlpha, TAG_DONE);//[GEC]
 		}
 	}
 
@@ -598,7 +597,7 @@ void DLoadSaveMenu::Drawer ()
 		{
 			screen->DrawText (SmallFont, CR_GOLD, commentLeft, commentTop
 				+ SmallFont->GetHeight()*i*CleanYfac, SaveComment[i].Text,
-				DTA_CleanNoMove, true, TAG_DONE);
+				DTA_CleanNoMove, true, DTA_Alpha, MenuAlpha, TAG_DONE);//[GEC]
 		}
 	}
 
@@ -613,7 +612,7 @@ void DLoadSaveMenu::Drawer ()
 
 		screen->DrawText (SmallFont, CR_GOLD, listboxLeft+(listboxWidth-textlen)/2,
 			listboxTop+(listboxHeight-rowHeight)/2, text,
-			DTA_CleanNoMove, true, TAG_DONE);
+			DTA_CleanNoMove, true, DTA_Alpha, MenuAlpha, TAG_DONE);//[GEC]
 		return;
 	}
 
@@ -648,27 +647,27 @@ void DLoadSaveMenu::Drawer ()
 			{
 				screen->DrawText (SmallFont, color,
 					listboxLeft+1, listboxTop+rowHeight*i+CleanYfac, node->Title,
-					DTA_CleanNoMove, true, TAG_DONE);
+					DTA_CleanNoMove, true, DTA_Alpha, MenuAlpha, TAG_DONE);//[GEC]
 			}
 			else
 			{
 				screen->DrawText (SmallFont, CR_WHITE,
 					listboxLeft+1, listboxTop+rowHeight*i+CleanYfac, savegamestring,
-					DTA_CleanNoMove, true, TAG_DONE);
+					DTA_CleanNoMove, true, DTA_Alpha, MenuAlpha, TAG_DONE);//[GEC]
 
 				char curs[2] = { SmallFont->GetCursor(), 0 };
 				screen->DrawText (SmallFont, CR_WHITE,
 					listboxLeft+1+SmallFont->StringWidth (savegamestring)*CleanXfac,
 					listboxTop+rowHeight*i+CleanYfac, 
 					curs,
-					DTA_CleanNoMove, true, TAG_DONE);
+					DTA_CleanNoMove, true, DTA_Alpha, MenuAlpha, TAG_DONE);//[GEC]
 			}
 		}
 		else
 		{
 			screen->DrawText (SmallFont, color,
 				listboxLeft+1, listboxTop+rowHeight*i+CleanYfac, node->Title,
-				DTA_CleanNoMove, true, TAG_DONE);
+				DTA_CleanNoMove, true, DTA_Alpha, MenuAlpha, TAG_DONE);//[GEC]
 		}
 	}
 } 
@@ -993,7 +992,7 @@ bool DSaveMenu::MenuEvent (int mkey, bool fromcontroller)
 			savegamestring[0] = 0;
 		}
 		DMenu *input = new DTextEnterMenu(this, savegamestring, SAVESTRINGSIZE, 1, fromcontroller);
-		M_ActivateMenu(input);
+		M_ActivateMenu(input, true);//[GEC]
 		mEntering = true;
 	}
 	else if (mkey == MKEY_Input)

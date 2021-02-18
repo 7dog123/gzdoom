@@ -61,9 +61,11 @@ DEFINE_SPECIAL(Polyobj_OR_MoveToSpot, 59, 3, 3, 3)
 DEFINE_SPECIAL(Plat_PerpetualRaise, 60, 3, 3, 3)
 DEFINE_SPECIAL(Plat_Stop, 61, 1, 1, 1)
 DEFINE_SPECIAL(Plat_DownWaitUpStay, 62, 3, 3, 3)
-DEFINE_SPECIAL(Plat_DownByValue, 63, 4, 4, 4)
+//DEFINE_SPECIAL(Plat_DownByValue, 63, 4, 4, 4)
+DEFINE_SPECIAL(Plat_DownByValue, 63, 4, 5, 5)//[GEC]
 DEFINE_SPECIAL(Plat_UpWaitDownStay, 64, 3, 3, 3)
-DEFINE_SPECIAL(Plat_UpByValue, 65, 4, 4, 4)
+//DEFINE_SPECIAL(Plat_UpByValue, 65, 4, 4, 4)
+DEFINE_SPECIAL(Plat_UpByValue, 65, 4, 5, 5)//[GEC]
 DEFINE_SPECIAL(Floor_LowerInstant, 66, 3, 3, 3)
 DEFINE_SPECIAL(Floor_RaiseInstant, 67, 3, 3, 3)
 DEFINE_SPECIAL(Floor_MoveToValueTimes8, 68, 4, 4, 4)

@@ -381,6 +381,9 @@ bool DCanvas::ParseDrawTextureTags (FTexture *img, double x, double y, DWORD tag
 	parms->specialcolormap = NULL;
 	parms->colormapstyle = NULL;
 
+	parms->color = -1;//[GEC]
+	parms->firepsx = false ;//[GEC]
+
 	parms->x = x;
 	parms->y = y;
 
@@ -414,7 +417,7 @@ bool DCanvas::ParseDrawTextureTags (FTexture *img, double x, double y, DWORD tag
 			break;
 
 		case DTA_DestWidthF:
-			parms->destwidth = va_arg(tags, double);
+			parms->destwidth = va_arg(tags, double)-0.064f;//[GEC] repara pexeles corridos
 			break;
 
 		case DTA_DestHeight:
@@ -685,6 +688,14 @@ bool DCanvas::ParseDrawTextureTags (FTexture *img, double x, double y, DWORD tag
 		case DTA_ColormapStyle:
 			parms->colormapstyle = va_arg(tags, FColormapStyle *);
 			break;
+
+		case DTA_GLCOLOR:
+			parms->color = va_arg(tags, uint32);//[GEC]
+			break;
+
+		case DTA_DrawFire:
+			parms->firepsx = true;//[GEC]
+			break;
 		}
 		tag = va_arg(tags, DWORD);
 	}
@@ -699,6 +710,8 @@ bool DCanvas::ParseDrawTextureTags (FTexture *img, double x, double y, DWORD tag
 	{
 		VirtualToRealCoords(parms->x, parms->y, parms->destwidth, parms->destheight,
 			parms->virtWidth, parms->virtHeight, virtBottom, !parms->keepratio);
+
+		parms->destwidth = parms->destwidth -0.064f;//[GEC] repara pexeles corridos
 	}
 
 	if (parms->destwidth <= 0 || parms->destheight <= 0)

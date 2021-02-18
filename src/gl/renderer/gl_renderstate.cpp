@@ -140,7 +140,8 @@ int FRenderState::SetupShader(bool cameratexture, int &shaderindex, int &cm, flo
 	return softwarewarp;
 }
 
-
+CVAR(Bool, gl_bandedswlight, false, CVAR_ARCHIVE)//[GEC] Shader
+CVAR(Bool, gl_psxcolor, false, CVAR_ARCHIVE);//[GEC] Shader
 //==========================================================================
 //
 // Apply shader settings
@@ -194,6 +195,19 @@ bool FRenderState::ApplyShader()
 
 	if (activeShader)
 	{
+		//Set Valores
+		activeShader->muPalLightLevels.Set(gl_bandedswlight ? 1 : 0);//[GEC] Shader
+		activeShader->muSoftLightPsx.Set((glset.lightmode == 16) ? 1 : 0);//[GEC] Shader
+		activeShader->muSetLightMode.Set(mSetLightMode);//[GEC] Shader
+		activeShader->muPsxBrightLevel.Set(mPsxBrightLevel);//[GEC] Shader
+		activeShader->muLight64.Set(mLight64);//[GEC] Shader
+		activeShader->muBlendColor.Set(mBlendColor);//[GEC] Shader
+		activeShader->muBlendMode.Set(mBlendMode);//[GEC] Shader
+		activeShader->muFadeLinear.Set(level.FadeLinear ? 1 : 0);//[GEC] Shader
+		activeShader->muPsxColor.Set(gl_psxcolor ? 1 : 0);//[GEC] Shader
+		activeShader->muWrapS.Set(mWrapS);//[GEC] Shader
+		activeShader->muWrapT.Set(mWrapT);//[GEC] Shader
+
 		int fogset = 0;
 		if (mFogEnabled)
 		{
@@ -259,7 +273,7 @@ bool FRenderState::ApplyShader()
 			glUniform3iv(activeShader->lightrange_index, 1, mNumLights);
 			glUniform4fv(activeShader->lights_index, mNumLights[2], mLightData);
 		}
-		if (glset.lightmode == 8)
+		if (glset.lightmode == 8 || glset.lightmode == 16)//[GEC]
 		{
 			glUniform3fv(activeShader->dlightcolor_index, 1, mDynLight);
 		}
@@ -337,8 +351,35 @@ void FRenderState::Apply(bool forcenoshader)
 			}
 			if (ffFogDensity != mFogDensity)
 			{
-				glFogf(GL_FOG_DENSITY, mFogDensity/64000.f);
-				ffFogDensity=mFogDensity;
+				if(level.FadeLinear)//[GEC]
+				{
+					glFogi(GL_FOG_MODE, GL_LINEAR);
+
+					int fognear = 985;
+					float fogfactor = (1000 - fognear);
+
+					float min;
+					float max;
+					float position;
+
+					position = ((float)fogfactor / 1000.0f);
+
+					if(position <= 0.0f) {
+						position = 0.00001f;
+					}
+
+					min = 5.0f / position;
+					max = 30.0f / position;
+
+					glFogf(GL_FOG_START, min);
+					glFogf(GL_FOG_END, max);
+				}
+				else
+				{
+					glFogi(GL_FOG_MODE, GL_EXP);
+					glFogf(GL_FOG_DENSITY, mFogDensity/64000.f);
+				}
+				ffFogDensity = mFogDensity;
 			}
 		}
 		if (mSpecialEffect != ffSpecialEffect)

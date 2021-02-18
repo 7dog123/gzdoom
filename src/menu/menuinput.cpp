@@ -43,6 +43,8 @@
 // [TP] New #includes
 #include "v_text.h"
 
+extern int MenuAlpha; //[GEC]
+
 IMPLEMENT_ABSTRACT_CLASS(DTextEnterMenu)
 
 #define INPUTGRID_WIDTH		13
@@ -136,7 +138,7 @@ bool DTextEnterMenu::Responder(event_t *ev)
 			if (ch == GK_ESCAPE)
 			{
 				DMenu *parent = mParentMenu;
-				Close();
+				Close(true);//[GEC]
 				parent->MenuEvent(MKEY_Abort, false);
 				return true;
 			}
@@ -149,7 +151,7 @@ bool DTextEnterMenu::Responder(event_t *ev)
 						strbin(mEnterString);
 
 					DMenu *parent = mParentMenu;
-					Close();
+					Close(true);//[GEC]
 					parent->MenuEvent(MKEY_Input, false);
 					return true;
 				}
@@ -343,7 +345,7 @@ void DTextEnterMenu::Drawer ()
 					screen->DrawTexture(pic, xx + cell_width/2 - width*CleanXfac/2, yy + top_padding,
 						DTA_Translation, remap,
 						DTA_CleanNoMove, true,
-						TAG_DONE);
+						DTA_Alpha, MenuAlpha, TAG_DONE);//[GEC]
 				}
 				else if (ch == ' ')
 				{
@@ -365,7 +367,7 @@ void DTextEnterMenu::Drawer ()
 					const char *const str = ch == '\b' ? "BS" : "ED";
 					screen->DrawText(SmallFont, color,
 						xx + cell_width/2 - SmallFont->StringWidth(str)*CleanXfac/2,
-						yy + top_padding, str, DTA_CleanNoMove, true, TAG_DONE);
+						yy + top_padding, str, DTA_CleanNoMove, true, DTA_Alpha, MenuAlpha, TAG_DONE);//[GEC]
 				}
 			}
 		}

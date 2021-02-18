@@ -427,7 +427,12 @@ void STACK_ARGS OpenGLFrameBuffer::DrawTextureV(FTexture *img, double x0, double
 
 	if (ParseDrawTextureTags(img, x0, y0, tag, tags, &parms, true))
 	{
-		if (GLRenderer != NULL) GLRenderer->DrawTexture(img, parms);
+		//if (GLRenderer != NULL) GLRenderer->DrawTexture(img, parms);
+		if (GLRenderer != NULL)
+		{
+			if(parms.firepsx) GLRenderer->DrawFireTexture(img, parms);
+			else GLRenderer->DrawTexture(img, parms);
+		}
 	}
 }
 

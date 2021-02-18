@@ -55,6 +55,8 @@ EXTERN_CVAR (Float, autoaim)
 EXTERN_CVAR(Bool, neverswitchonpickup)
 EXTERN_CVAR (Bool, cl_run)
 
+extern int MenuAlpha; //[GEC]
+
 //=============================================================================
 //
 // Player's name
@@ -120,22 +122,22 @@ void FPlayerNameBox::DrawBorder (int x, int y, int len)
 	{
 		int i;
 
-		screen->DrawTexture (left, x-8, y+7, DTA_Clean, true, TAG_DONE);
+		screen->DrawTexture (left, x-8, y+7, DTA_Clean, true, DTA_Alpha, MenuAlpha, TAG_DONE);//[GEC]
 
 		for (i = 0; i < len; i++)
 		{
-			screen->DrawTexture (mid, x, y+7, DTA_Clean, true, TAG_DONE);
+			screen->DrawTexture (mid, x, y+7, DTA_Clean, true, DTA_Alpha, MenuAlpha, TAG_DONE);//[GEC]
 			x += 8;
 		}
 
-		screen->DrawTexture (right, x, y+7, DTA_Clean, true, TAG_DONE);
+		screen->DrawTexture (right, x, y+7, DTA_Clean, true, DTA_Alpha, MenuAlpha, TAG_DONE);//[GEC]
 	}
 	else
 	{
 		FTexture *slot = TexMan[TexMan.CheckForTexture("M_FSLOT", FTexture::TEX_MiscPatch)];
 		if (slot != NULL)
 		{
-			screen->DrawTexture (slot, x, y+1, DTA_Clean, true, TAG_DONE);
+			screen->DrawTexture (slot, x, y+1, DTA_Clean, true, DTA_Alpha, MenuAlpha, TAG_DONE);//[GEC]
 		}
 		else
 		{
@@ -156,7 +158,7 @@ void FPlayerNameBox::Drawer(bool selected)
 	if (text != NULL)
 	{
 		if (*text == '$') text = GStrings(text+1);
-		screen->DrawText(mFont, selected? OptionSettings.mFontColorSelection : mFontColor, mXpos, mYpos, text, DTA_Clean, true, TAG_DONE);
+		screen->DrawText(mFont, selected? OptionSettings.mFontColorSelection : mFontColor, mXpos, mYpos, text, DTA_Clean, true, DTA_Alpha, MenuAlpha, TAG_DONE);//[GEC]
 	}
 
 	// Draw player name box
@@ -165,7 +167,7 @@ void FPlayerNameBox::Drawer(bool selected)
 	if (!mEntering)
 	{
 		screen->DrawText (SmallFont, CR_UNTRANSLATED, x + mFrameSize, mYpos, mPlayerName,
-			DTA_Clean, true, TAG_DONE);
+			DTA_Clean, true, DTA_Alpha, MenuAlpha, TAG_DONE);//[GEC]
 	}
 	else
 	{
@@ -174,7 +176,7 @@ void FPlayerNameBox::Drawer(bool selected)
 		mEditName[l+1] = 0;
 
 		screen->DrawText (SmallFont, CR_UNTRANSLATED, x + mFrameSize, mYpos, mEditName,
-			DTA_Clean, true, TAG_DONE);
+			DTA_Clean, true, DTA_Alpha, MenuAlpha, TAG_DONE);//[GEC]
 		
 		mEditName[l] = 0;
 	}
@@ -194,7 +196,7 @@ bool FPlayerNameBox::MenuEvent(int mkey, bool fromcontroller)
 		strcpy(mEditName, mPlayerName);
 		mEntering = true;
 		DMenu *input = new DTextEnterMenu(DMenu::CurrentMenu, mEditName, MAXPLAYERNAME, 2, fromcontroller);
-		M_ActivateMenu(input);
+		M_ActivateMenu(input, true);//[GEC]
 		return true;
 	}
 	else if (mkey == MKEY_Input)
@@ -321,10 +323,15 @@ void FValueTextItem::Drawer(bool selected)
 	const char *text = mText;
 
 	if (*text == '$') text = GStrings(text+1);
-	screen->DrawText(mFont, selected? OptionSettings.mFontColorSelection : mFontColor, mXpos, mYpos, text, DTA_Clean, true, TAG_DONE);
+	screen->DrawText(mFont, selected? OptionSettings.mFontColorSelection : mFontColor, mXpos, mYpos, text, DTA_Clean, true, DTA_Alpha, MenuAlpha, TAG_DONE);//[GEC]
 
 	int x = mXpos + mFont->StringWidth(text) + 8;
-	if (mSelections.Size() > 0) screen->DrawText(mFont, mFontColor2, x, mYpos, mSelections[mSelection], DTA_Clean, true, TAG_DONE);
+	if (mSelections.Size() > 0)
+	{
+		const char *mOptValue = mSelections[mSelection];
+		if (*mOptValue == '$') mOptValue = GStrings(mOptValue + 1);
+		screen->DrawText(mFont, mFontColor2, x, mYpos, mOptValue, DTA_Clean, true, DTA_Alpha, MenuAlpha, TAG_DONE);//[GEC]
+	}
 }
 
 //=============================================================================
@@ -457,12 +464,12 @@ void FSliderItem::DrawSlider (int x, int y)
 		"\x10\x11\x11\x11\x11\x11\x11\x11\x11\x11\x11\x12",
 		DTA_CellX, 8 * CleanXfac,
 		DTA_CellY, 8 * CleanYfac,
-		TAG_DONE);
+		DTA_Alpha, MenuAlpha, TAG_DONE);//[GEC]
 	screen->DrawText (ConFont, CR_ORANGE, x + (5 + (int)((cur * 78) / range)) * CleanXfac, y,
 		"\x13",
 		DTA_CellX, 8 * CleanXfac,
 		DTA_CellY, 8 * CleanYfac,
-		TAG_DONE);
+		DTA_Alpha, MenuAlpha, TAG_DONE);//[GEC]
 }
 
 //=============================================================================
@@ -476,10 +483,10 @@ void FSliderItem::Drawer(bool selected)
 	const char *text = mText;
 
 	if (*text == '$') text = GStrings(text+1);
-	screen->DrawText(mFont, selected? OptionSettings.mFontColorSelection : mFontColor, mXpos, mYpos, text, DTA_Clean, true, TAG_DONE);
+	screen->DrawText(mFont, selected? OptionSettings.mFontColorSelection : mFontColor, mXpos, mYpos, text, DTA_Clean, true, DTA_Alpha, MenuAlpha, TAG_DONE);//[GEC]
 
 	int x = SmallFont->StringWidth ("Green") + 8 + mXpos;
-	int x2 = SmallFont->StringWidth (mText) + 8 + mXpos;
+	int x2 = SmallFont->StringWidth (text) + 8 + mXpos;
 	DrawSlider (MAX(x2, x), mYpos);
 }
 
@@ -1139,11 +1146,11 @@ void DPlayerMenu::Drawer ()
 	screen->DrawText (SmallFont, CR_GOLD, 320 - 32 - 32 -
 		SmallFont->StringWidth (str)/2,
 		50 + 48 + 70, str,
-		DTA_Clean, true, TAG_DONE);
+		DTA_Clean, true, DTA_Alpha, MenuAlpha, TAG_DONE);//[GEC]
 	str = mRotation ? "TO SEE FRONT" : "TO SEE BACK";
 	screen->DrawText (SmallFont, CR_GOLD, 320 - 32 - 32 -
 		SmallFont->StringWidth (str)/2,
 		50 + 48 + 70 + SmallFont->GetHeight (), str,
-		DTA_Clean, true, TAG_DONE);
+		DTA_Clean, true, DTA_Alpha, MenuAlpha, TAG_DONE);//[GEC]
 
 }

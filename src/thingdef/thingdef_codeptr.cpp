@@ -1238,6 +1238,9 @@ enum FB_Flags
 	FBF_NOPITCH = 8,
 	FBF_NOFLASH = 16,
 	FBF_NORANDOMPUFFZ = 32,
+	FBF_RANDOMOFFSET = 64,//[GEC]
+	FBF_PSXFORMULA = 128,//[GEC]
+	FBF_D64FORMULA = 256,//[GEC]
 };
 
 DEFINE_ACTION_FUNCTION_PARAMS(AActor, A_FireBullets)
@@ -1266,6 +1269,24 @@ DEFINE_ACTION_FUNCTION_PARAMS(AActor, A_FireBullets)
 		if (!weapon->DepleteAmmo(weapon->bAltFire, true))
 			return;	// out of ammo
 	}
+
+	if ((flags & FBF_RANDOMOFFSET))//[GEC]
+	{
+		int ammo = weapon->Ammo1->Amount;
+		int rand;
+		int ypos;
+
+		// randomize sx
+		rand = (((pr_cwbullet() & 1) << 1) - 1);
+		rand -= 1;
+		player->psprites[0].sx = (rand * FRACUNIT);
+
+		// randomize sy
+		rand = -((((ammo - 1) & 1) << 1) - 1);
+		rand -= 1;
+		ypos = rand == -2 ? 1 : 2;
+		player->psprites[0].sy = WEAPONTOP - ((rand * (ypos * FRACUNIT)));
+	}
 	
 	if (range == 0)
 		range = PLAYERMISSILERANGE;
@@ -1288,7 +1309,23 @@ DEFINE_ACTION_FUNCTION_PARAMS(AActor, A_FireBullets)
 		int damage = damageperbullet;
 
 		if (!(flags & FBF_NORANDOM))
-			damage *= ((pr_cwbullet()%3)+1);
+		{
+			if (flags & FBF_PSXFORMULA)//[GEC]
+			{
+				//(P_Random() & 3) + 1 << 2;
+				damage *= ((pr_cwbullet() & 3) + 1);
+			}
+			else if (flags & FBF_D64FORMULA)//[GEC]
+			{
+				//((P_Random(pr_gunshot)&3)<<2)+4;
+				damage *= ((pr_cwbullet() & 3));
+				damage += 4;
+			}
+			else//PC Formula
+			{
+				damage *= ((pr_cwbullet()%3)+1);
+			}
+		}
 
 		P_LineAttack(self, bangle, range, bslope, damage, NAME_Hitscan, pufftype, laflags);
 	}
@@ -1315,7 +1352,23 @@ DEFINE_ACTION_FUNCTION_PARAMS(AActor, A_FireBullets)
 			int damage = damageperbullet;
 
 			if (!(flags & FBF_NORANDOM))
-				damage *= ((pr_cwbullet()%3)+1);
+			{
+				if (flags & FBF_PSXFORMULA)//[GEC]
+				{
+					//(P_Random() & 3) + 1 << 2;
+					damage *= ((pr_cwbullet() & 3) + 1);
+				}
+				else if (flags & FBF_D64FORMULA)//[GEC]
+				{
+					//((P_Random(pr_gunshot)&3)<<2)+4;
+					damage *= ((pr_cwbullet() & 3));
+					damage += 4;
+				}
+				else//PC Formula
+				{
+					damage *= ((pr_cwbullet()%3)+1);
+				}
+			}
 
 			P_LineAttack(self, angle, range, slope, damage, NAME_Hitscan, pufftype, laflags);
 		}
@@ -1711,6 +1764,12 @@ static void DoGiveInventory(AActor * receiver, bool use_aaptr, DECLARE_PARAMINFO
 	if (amount==0) amount=1;
 	if (mi) 
 	{
+		if (!mi->IsDescendantOf (RUNTIME_CLASS(AInventory)))
+		{
+			ACTION_SET_RESULT(false);
+			return;
+		}
+
 		AInventory *item = static_cast<AInventory *>(Spawn (mi, 0, 0, 0, NO_REPLACE));
 		if (!item)
 		{
@@ -1879,6 +1938,9 @@ enum SIX_Flags
 	SIXF_ISTARGET				= 0x04000000,
 	SIXF_ISMASTER				= 0x08000000,
 	SIXF_ISTRACER				= 0x10000000,
+	SIXF_TRANSFERLASTHEARD			= 0x20000000,//[GEC] Nuevo Flag
+	SIXF_TRANSFERNOINFIGHTINGFLAG	= 0x40000000,//[GEC] Nuevo Flag
+	SIXF_TRANSFERCOUNTSECRET		= 0x80000000,//[GEC] Nuevo Flag
 };
 
 static bool InitSpawnedItem(AActor *self, AActor *mo, int flags)
@@ -1902,6 +1964,12 @@ static bool InitSpawnedItem(AActor *self, AActor *mo, int flags)
 			mo->Translation = TRANSLATION(TRANSLATION_Blood, bloodcolor.a);
 		}
 	}
+
+	if (flags & SIXF_TRANSFERLASTHEARD)//[GEC]
+	{
+		mo->LastHeard = self->LastHeard;
+	}
+
 	if (flags & SIXF_TRANSFERPOINTERS)
 	{
 		mo->target = self->target;
@@ -1996,6 +2064,21 @@ static bool InitSpawnedItem(AActor *self, AActor *mo, int flags)
 	if (flags & SIXF_TRANSFERAMBUSHFLAG)
 	{
 		mo->flags = (mo->flags & ~MF_AMBUSH) | (self->flags & MF_AMBUSH);
+	}
+	if (flags & SIXF_TRANSFERNOINFIGHTINGFLAG)//[GEC]
+	{
+		mo->flags5 = (mo->flags5 & ~MF5_NOINFIGHTING) | (self->flags5 & MF5_NOINFIGHTING);
+	}
+	if (flags & SIXF_TRANSFERCOUNTSECRET)//[GEC]
+	{
+		mo->flags5 = (mo->flags5 & ~MF5_COUNTSECRET) | (self->flags5 & MF5_COUNTSECRET);
+
+		// And for secrets
+		if (mo->flags5 & MF5_COUNTSECRET)
+		{
+			if(!(mo->flags8 & MF8_NOCOUNTSECRET))// [GEC] Force No Count Secret
+				level.total_secrets++;
+		}
 	}
 	if (flags & SIXF_CLEARCALLERTID)
 	{
@@ -2435,6 +2518,8 @@ enum FadeFlags
 {
 	FTF_REMOVE =	1 << 0,
 	FTF_CLAMP =		1 << 1,
+	FTF_D64FADE =	1 << 2, //[GEC]
+	FTF_D64FLAGRESERVE =	1 << 3, //[GEC]
 };
 
 DEFINE_ACTION_FUNCTION_PARAMS(AActor, A_FadeIn)
@@ -2448,17 +2533,24 @@ DEFINE_ACTION_FUNCTION_PARAMS(AActor, A_FadeIn)
 		reduce = FRACUNIT / 10;
 	}
 	self->RenderStyle.Flags &= ~STYLEF_Alpha1;
-	self->alpha += reduce;
 
-	if (self->alpha >= FRACUNIT)
+	if (flags & FTF_D64FADE)//[GEC]
 	{
-		if (flags & FTF_CLAMP)
+		new P_FadeMobj(self, reduce, FRACUNIT, 0, (flags & FTF_REMOVE)? true : false, (flags & FTF_D64FLAGRESERVE)? true : false);
+	}
+	else
+	{
+		self->alpha += reduce;
+		if (self->alpha >= FRACUNIT)
 		{
-			self->alpha = FRACUNIT;
-		}
-		if (flags & FTF_REMOVE)
-		{
-			P_RemoveThing(self);
+			if (flags & FTF_CLAMP)
+			{
+				self->alpha = FRACUNIT;
+			}
+			if (flags & FTF_REMOVE)
+			{
+				P_RemoveThing(self);
+			}
 		}
 	}
 }
@@ -2481,16 +2573,25 @@ DEFINE_ACTION_FUNCTION_PARAMS(AActor, A_FadeOut)
 		reduce = FRACUNIT/10;
 	}
 	self->RenderStyle.Flags &= ~STYLEF_Alpha1;
-	self->alpha -= reduce;
-	if (self->alpha <= 0)
+
+	if (flags & FTF_D64FADE)//[GEC]
 	{
-		if (flags & FTF_CLAMP)
+		new P_FadeMobj(self, -reduce, 0, 0, (flags & FTF_REMOVE)? true : false, (flags & FTF_D64FLAGRESERVE)? true : false);
+	}
+	else
+	{
+		self->alpha -= reduce;
+
+		if (self->alpha <= 0)
 		{
-			self->alpha = 0;
-		}
-		if (flags & FTF_REMOVE)
-		{
-			P_RemoveThing(self);
+			if (flags & FTF_CLAMP)
+			{
+				self->alpha = 0;
+			}
+			if (flags & FTF_REMOVE)
+			{
+				P_RemoveThing(self);
+			}
 		}
 	}
 }
@@ -2512,31 +2613,45 @@ DEFINE_ACTION_FUNCTION_PARAMS(AActor, A_FadeTo)
 
 	self->RenderStyle.Flags &= ~STYLEF_Alpha1;
 
-	if (self->alpha > target)
+	if (flags & FTF_D64FADE)//[GEC]
 	{
-		self->alpha -= amount;
-
-		if (self->alpha < target)
-		{
-			self->alpha = target;
-		}
-	}
-	else if (self->alpha < target)
-	{
-		self->alpha += amount;
-
 		if (self->alpha > target)
 		{
-			self->alpha = target;
+			new P_FadeMobj(self, -amount, target, 0, (flags & FTF_REMOVE)? true : false, (flags & FTF_D64FLAGRESERVE)? true : false);
+		}
+		else if (self->alpha < target)
+		{
+			new P_FadeMobj(self, amount, target, 0, (flags & FTF_REMOVE)? true : false, (flags & FTF_D64FLAGRESERVE)? true : false);
 		}
 	}
-	if (flags & FTF_CLAMP)
+	else
 	{
-		self->alpha = clamp(self->alpha, 0, FRACUNIT);
-	}
-	if (self->alpha == target && (flags & FTF_REMOVE))
-	{
-		P_RemoveThing(self);
+		if (self->alpha > target)
+		{
+			self->alpha -= amount;
+
+			if (self->alpha < target)
+			{
+				self->alpha = target;
+			}
+		}
+		else if (self->alpha < target)
+		{
+			self->alpha += amount;
+
+			if (self->alpha > target)
+			{
+				self->alpha = target;
+			}
+		}
+		if (flags & FTF_CLAMP)
+		{
+			self->alpha = clamp(self->alpha, 0, FRACUNIT);
+		}
+		if (self->alpha == target && (flags & FTF_REMOVE))
+		{
+			P_RemoveThing(self);
+		}
 	}
 }
 
@@ -4048,6 +4163,7 @@ enum
 {
 	SPF_FORCECLAMP = 1,	// players always clamp
 	SPF_INTERPOLATE = 2,
+	SPF_RECOILPITCH = 4, // [GEC] AUTO AJUSTE PITCH
 };
 
 
@@ -4090,7 +4206,7 @@ DEFINE_ACTION_FUNCTION_PARAMS(AActor, A_SetPitch)
 		return;
 	}
 
-	ref->SetPitch(pitch, !!(flags & SPF_INTERPOLATE), !!(flags & SPF_FORCECLAMP));
+	ref->SetPitch(pitch, !!(flags & SPF_INTERPOLATE), !!(flags & SPF_FORCECLAMP), !!(flags & SPF_RECOILPITCH));//[GEC]
 }
 
 //===========================================================================
@@ -6093,7 +6209,7 @@ DEFINE_ACTION_FUNCTION_PARAMS(AActor, A_CheckProximity)
 		//Check inheritance for the classname. Taken partly from CheckClass DECORATE function.
 		if (flags & CPXF_ANCESTOR)
 		{
-			if (!(mo->GetClass()->IsAncestorOf(classname)))
+			if (!(mo->IsKindOf(classname)))
 				continue;
 		}
 		//Otherwise, just check for the regular class name.
@@ -6357,3 +6473,63 @@ DEFINE_ACTION_FUNCTION_PARAMS(AActor, A_FaceMovementDirection)
 	}
 }
 
+//===========================================================================
+//
+// [GEC] A_ActorExplode
+//
+//===========================================================================
+DEFINE_ACTION_FUNCTION_PARAMS(AActor, A_ActorExplode)
+{
+	ACTION_PARAM_START(3);
+	ACTION_PARAM_CLASS(missile, 0);
+	ACTION_PARAM_INT(delaydraw, 1);
+	ACTION_PARAM_INT(drawcount, 2);
+
+	if (!missile) 
+	{
+		ACTION_SET_RESULT(false);
+		return;
+	}
+	else if (drawcount != 0) 
+	{
+		new T_MobjExplode (self, missile, delaydraw, drawcount);
+	}
+}
+
+//===========================================================================
+//
+// [GEC] A_TargetCamera
+//
+//===========================================================================
+DEFINE_ACTION_FUNCTION(AActor, A_TargetCamera)
+{
+	AActor *targ;
+
+	self->threshold = INT_MAX;
+
+	FActorIterator it (self->tid+1);
+	targ = it.Next ();
+
+	if(targ)
+	{
+		self->target = targ;
+		self->SetState (self->MissileState);
+	}
+}
+
+//===========================================================================
+//
+// [GEC] A_BFGFlash
+//
+//===========================================================================
+DEFINE_ACTION_FUNCTION_PARAMS(AActor, A_BFGFlash)
+{
+	ACTION_PARAM_START(2);
+	ACTION_PARAM_COLOR(color1, 0);
+	ACTION_PARAM_INT(ticdown, 1);
+
+	if (!self->target->player) return;
+
+	self->target->player->bfgticdown = ticdown;
+	self->target->player->bfgcolor = color1;
+}

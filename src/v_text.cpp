@@ -47,6 +47,8 @@
 #include "doomstat.h"
 #include "templates.h"
 
+#include "r_state.h"//[GEC]
+
 //
 // DrawChar
 //
@@ -73,7 +75,6 @@ void STACK_ARGS DCanvas::DrawChar (FFont *font, int normalcolor, int x, int y, B
 	}
 }
 
-//
 // DrawText
 //
 // Write a string using the given font
@@ -97,6 +98,9 @@ void DCanvas::DrawTextV(FFont *font, int normalcolor, int x, int y, const char *
 	int			scalex, scaley;
 	int			kerning;
 	FTexture *pic;
+
+	double ResW = 0.f;//[GEC]
+	double ResH = 0.f;//[GEC]
 
 	if (font == NULL || string == NULL)
 		return;
@@ -199,6 +203,14 @@ void DCanvas::DrawTextV(FFont *font, int normalcolor, int x, int y, const char *
 		case DTA_CellY:
 			height = va_arg (tags, int);
 			break;
+
+		case DTA_ResWidthF:
+			ResW = va_arg(tags, int)/*-0.064f*/;//[GEC] repara pexeles corridos
+			break;
+
+		case DTA_ResHeightF:
+			ResH = va_arg(tags, int);//[GEC]
+			break;
 		}
 		tag = va_arg (tags, uint32);
 	}
@@ -236,20 +248,47 @@ void DCanvas::DrawTextV(FFont *font, int normalcolor, int x, int y, const char *
 #else
 			tags = taglist;
 #endif
-			if (forcedwidth)
+			if(ResW != 0 && ResH != 0)//[GEC]
 			{
-				w = forcedwidth;
-				DrawTexture (pic, cx, cy,
+				/*double rx = cx;
+				double ry = cy;
+				double rw = w;
+				double rh = height-1;
+
+				rw = pic->GetScaledWidthDouble();
+				rh = pic->GetScaledHeightDouble();
+
+				screen->VirtualToRealCoords(rx, ry, rw, rh, ResW, ResH, true);
+
+				screen->DrawTexture (pic, rx, ry,
+					DTA_DestWidthF, rw,
+					DTA_DestHeightF, rh, 
 					DTA_Translation, range,
-					DTA_DestWidth, forcedwidth,
-					DTA_DestHeight, height,
+					TAG_MORE, &tags);*/
+				screen->DrawTexture (pic, cx, cy,
+					DTA_Bottom320x200, false,// activate virtBottom
+					DTA_VirtualWidthF, (double)ResW,
+					DTA_VirtualHeightF, (double)ResH,
+					DTA_Translation, range,
 					TAG_MORE, &tags);
 			}
 			else
 			{
-				DrawTexture (pic, cx, cy,
-					DTA_Translation, range,
-					TAG_MORE, &tags);
+				if (forcedwidth)
+				{
+					w = forcedwidth;
+					DrawTexture (pic, cx, cy,
+						DTA_Translation, range,
+						DTA_DestWidth, forcedwidth,
+						DTA_DestHeight, height,
+						TAG_MORE, &tags);
+				}
+				else
+				{
+					DrawTexture (pic, cx, cy,
+						DTA_Translation, range,
+						TAG_MORE, &tags);
+				}
 			}
 			va_end (tags);
 		}
@@ -276,7 +315,7 @@ void STACK_ARGS DCanvas::DrawTextA (FFont *font, int normalcolor, int x, int y, 
 //
 // Find string width using this font
 //
-int FFont::StringWidth (const BYTE *string) const
+int FFont::StringWidth (const BYTE *string, bool lineonly) const
 {
 	int w = 0;
 	int maxw = 0;
@@ -305,6 +344,8 @@ int FFont::StringWidth (const BYTE *string) const
 				maxw = w;
 			w = 0;
 			++string;
+			if(lineonly)
+				break;
 		}
 		else
 		{

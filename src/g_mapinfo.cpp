@@ -273,6 +273,15 @@ void level_info_t::Reset()
 	SndSeq = "";
 	BorderTexture = "";
 	teamdamage = 0.f;
+
+	SkyFlatName = "";// [GEC]
+	ExitDelay = 0;//[GEC]
+	FadeInBrightness = false;//[GEC]
+	NoAlphaMask = false;//[GEC]
+	FadeLinear = false;//[GEC]
+	ContinueMusicOnExit = false;//[GEC]
+	ClearMessages = false;//[GEC]
+
 	specialactions.Clear();
 	DefaultEnvironment = 0;
 	PrecacheSounds.Clear();
@@ -418,6 +427,33 @@ void cluster_info_t::Reset()
 	cdtrack = 0;
 	ClusterName = "";
 	cdid = 0;
+
+	// [GEC]
+	TextAdd = false;
+	TextSpeed = -1;
+	TextDelay = -1;
+	TextResW = 0;
+	TextResH = 0;
+	TextX = 0;
+	TextY = 0;
+	PicResW = 0;
+	PicResH = 0;
+	PicX = 0;
+	PicY = 0;
+	CenterText = false;
+	FadeText = false;
+	PlainText = false;
+	PlainSync = false;
+	ScrollText = false;
+	ScrollTextSpeed = 0;
+	ScrollTextDirection = 0;
+	ScrollTextTime = 0;
+	RowPadding = FRACUNIT;
+	FontName = NULL;
+	WipeOut = GS_FINALE;
+	NoSkip = false;
+	AutoSkip = false;
+	NextMusic = "";
 }
 
 
@@ -676,6 +712,44 @@ void FMapInfoParser::ParseMusic(FString &name, int &order)
 
 void FMapInfoParser::ParseCluster()
 {
+	enum EScrollDir
+	{
+		SCROLL_Left,
+		SCROLL_Right,
+		SCROLL_Up,
+		SCROLL_Down,
+	};
+
+	struct ScrollType//[GEC]
+	{
+		const char *Name;
+		EScrollDir Type;
+	}
+	const ST[] = {
+		{ "Left", SCROLL_Left },
+		{ "Right", SCROLL_Right },
+		{ "Up", SCROLL_Up },
+		{ "Down", SCROLL_Down },
+		{ NULL, SCROLL_Up }
+	};
+
+	struct WipeType
+	{
+		const char *Name;
+		gamestate_t Type;
+	}
+	const FT[] = {
+		{ "Crossfade", GS_FORCEWIPEFADE },
+		{ "Melt", GS_FORCEWIPEMELT },
+		{ "Burn", GS_FORCEWIPEBURN },
+		{ "Default", GS_FORCEWIPE },
+		{ "Melt64", GS_FORCEWIPEMELT64 },//[GEC]
+		{ "FadeScreen", GS_FORCEWIPEFADESCREEN  },//[GEC]
+		{ "LoadingScreen", GS_FORCEWIPELOADINGSCREEN  },//[GEC]
+		{ "NullWipe", GS_FORCEWIPENONE  },//[GEC]
+		{ NULL, GS_FINALE }//GS_FORCEWIPE }
+	};
+
 	sc.MustGetNumber ();
 	int clusterindex = FindWadClusterInfo (sc.Number);
 	if (clusterindex == -1)
@@ -748,6 +822,135 @@ void FMapInfoParser::ParseCluster()
 		else if (sc.Compare("exittextislump"))
 		{
 			clusterinfo->flags |= CLUSTER_EXITTEXTINLUMP;
+		}
+		// [GEC] Stuff
+		else if (sc.Compare("nointermission"))//[GEC]
+		{
+			clusterinfo->flags |= CLUSTER_NOINTERMISSION;
+		}
+		else if (sc.Compare("textadd"))//[GEC]
+		{
+			clusterinfo->TextAdd = true;
+		}
+		else if (sc.Compare("textspeed"))//[GEC]
+		{
+			ParseAssign();
+			sc.MustGetNumber();
+			clusterinfo->TextSpeed = sc.Number;
+		}
+		else if (sc.Compare("textdelay"))//[GEC]
+		{
+			ParseAssign();
+			sc.MustGetNumber();
+			clusterinfo->TextDelay = sc.Number;
+		}
+		else if (sc.Compare("textresolution"))//[GEC]
+		{
+			ParseAssign();
+			sc.MustGetNumber();
+			clusterinfo->TextResW = sc.Number;
+			ParseComma();
+			sc.MustGetNumber();
+			clusterinfo->TextResH = sc.Number;
+		}
+		else if (sc.Compare("texposition"))//[GEC]
+		{
+			ParseAssign();
+			sc.MustGetNumber();
+			clusterinfo->TextX = sc.Number;
+			ParseComma();
+			sc.MustGetNumber();
+			clusterinfo->TextY = sc.Number;
+		}
+		else if (sc.Compare("picresolution"))//[GEC]
+		{
+			ParseAssign();
+			sc.MustGetNumber();
+			clusterinfo->PicResW = sc.Number;
+			ParseComma();
+			sc.MustGetNumber();
+			clusterinfo->PicResH = sc.Number;
+		}
+		else if (sc.Compare("picposition"))//[GEC]
+		{
+			ParseAssign();
+			sc.MustGetNumber();
+			clusterinfo->PicX = sc.Number;
+			ParseComma();
+			sc.MustGetNumber();
+			clusterinfo->PicY = sc.Number;
+		}
+		else if (sc.Compare("centertext"))//[GEC]
+		{
+			clusterinfo->CenterText = true;
+		}
+		else if (sc.Compare("fadetext"))//[GEC]
+		{
+			clusterinfo->FadeText = true;
+		}
+		else if (sc.Compare("plaintext"))//[GEC]
+		{
+			clusterinfo->PlainText = true;
+		}
+		else if (sc.Compare("plainsync"))//[GEC]
+		{
+			clusterinfo->PlainSync = true;
+		}
+		else if (sc.Compare("scrolltext"))//[GEC]
+		{
+			clusterinfo->ScrollText = true;
+		}
+		else if (sc.Compare("noskip"))//[GEC]
+		{
+			clusterinfo->NoSkip = true;
+		}
+		else if (sc.Compare("autoskip"))//[GEC]
+		{
+			clusterinfo->AutoSkip = true;
+		}
+		else if (sc.Compare("scrolltextspeed"))//[GEC]
+		{
+			ParseAssign();
+			sc.MustGetNumber();
+			clusterinfo->ScrollTextSpeed = sc.Number;
+		}
+		else if (sc.Compare("scrolltextdirection"))//[GEC]
+		{
+		sc.MustGetToken('=');
+		sc.MustGetToken(TK_Identifier);
+		int v = sc.MatchString(&ST[0].Name, sizeof(ST[0]));
+		if (v != -1) clusterinfo->ScrollTextDirection = ST[v].Type;
+		}
+		else if (sc.Compare("scrolltime"))//[GEC]
+		{
+			ParseAssign();
+			sc.MustGetNumber();
+			clusterinfo->ScrollTextTime = sc.Number;
+		}
+		else if (sc.Compare("rowpadding"))//[GEC]
+		{
+			ParseAssign();
+			sc.MustGetNumber();
+			clusterinfo->RowPadding = sc.Number;
+		}
+		else if (sc.Compare("fontname"))//[GEC]
+		{
+			ParseAssign();
+			sc.MustGetString();
+			clusterinfo->FontName = sc.String;
+		}
+		else if (sc.Compare("forcewipeout"))//[GEC]
+		{
+			ParseAssign();//forcewipe
+			sc.MustGetToken(TK_Identifier);
+			int v = sc.MatchString(&FT[0].Name, sizeof(FT[0]));
+			if (v != -1) clusterinfo->WipeOut = FT[v].Type;
+		}
+		else if (sc.Compare("nextmusic"))//[GEC]
+		{
+			sc.MustGetToken('=');
+			sc.MustGetToken(TK_StringConst);
+			clusterinfo->NextMusic = sc.String;
 		}
 		else if (!ParseCloseBrace())
 		{
@@ -1189,6 +1392,50 @@ DEFINE_MAP_OPTION(defaultenvironment, false)
 	info->DefaultEnvironment = id;
 }
 
+DEFINE_MAP_OPTION(forcegodmode, true)//[GEC]
+{
+	info->ForceGodMode = true;
+}
+DEFINE_MAP_OPTION(ClearChts, true)//[GEC]
+{
+	info->ClearChts = true;
+}
+DEFINE_MAP_OPTION(skyflatname, true)//[GEC]
+{
+	parse.ParseAssign();
+	parse.ParseLumpOrTextureName(info->SkyFlatName);
+}
+DEFINE_MAP_OPTION(exitdelay, true)//[GEC]
+{
+	parse.ParseAssign();
+	parse.sc.MustGetNumber();
+	info->ExitDelay = abs(parse.sc.Number);
+}
+DEFINE_MAP_OPTION(fadeinbrightness, true)//[GEC]
+{
+	info->FadeInBrightness = true;
+}
+DEFINE_MAP_OPTION(noalphamask, true)//[GEC]
+{
+	info->NoAlphaMask = true;
+}
+DEFINE_MAP_OPTION(fadelinear, true)//[GEC]
+{
+	parse.ParseAssign();
+	parse.sc.MustGetNumber();
+	if(parse.sc.Number != 0)
+		info->FadeLinear = true;
+	else
+		info->FadeLinear = false;
+}
+DEFINE_MAP_OPTION(continuemusiconexit, true)//[GEC]
+{
+	info->ContinueMusicOnExit = true;
+}
+DEFINE_MAP_OPTION(clearmessagesonintermission, true)//[GEC]
+{
+	info->ClearMessages = true;
+}
 
 //==========================================================================
 //
@@ -1321,6 +1568,7 @@ MapFlagHandlers[] =
 	{ "compat_corpsegibs",				MITYPE_COMPATFLAG, COMPATF_CORPSEGIBS, 0 },
 	{ "compat_noblockfriends",			MITYPE_COMPATFLAG, COMPATF_NOBLOCKFRIENDS, 0 },
 	{ "compat_spritesort",				MITYPE_COMPATFLAG, COMPATF_SPRITESORT, 0 },
+	{ "compat_hitscan",					MITYPE_COMPATFLAG, COMPATF_HITSCAN, 0 },//[GEC]
 	{ "compat_light",					MITYPE_COMPATFLAG, COMPATF_LIGHT, 0 },
 	{ "compat_polyobj",					MITYPE_COMPATFLAG, COMPATF_POLYOBJ, 0 },
 	{ "compat_maskedmidtex",			MITYPE_COMPATFLAG, COMPATF_MASKEDMIDTEX, 0 },
@@ -1846,6 +2094,18 @@ void FMapInfoParser::ParseMapInfo (int lump, level_info_t &gamedefaults, level_i
 		else if (sc.Compare("skill"))
 		{
 			ParseSkill();
+		}
+		else if (sc.Compare("statscreen"))//[GEC]
+		{
+			if (format_type != FMT_Old)
+			{
+				format_type = FMT_New;
+				ParseStatScreen();
+			}
+			else
+			{
+				sc.ScriptError("statscreen definitions not supported with old MAPINFO syntax");
+			}
 		}
 		else if (sc.Compare("clearskills"))
 		{

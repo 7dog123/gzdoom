@@ -348,8 +348,10 @@ void P_SerializeWorld (FArchive &arc)
 		else
 		{
 			arc << sec->lightlevel;
+			arc << sec->lightlevel_64;//[GEC]
 		}
 		arc << sec->special;
+		arc << sec->cpyspecial; // [GEC] solo para copiar
 		if (SaveVersion < 4523)
 		{
 			short tag;
@@ -433,6 +435,19 @@ void P_SerializeWorld (FArchive &arc)
 			<< sec->interpolations[3]
 			<< sec->SeqName;
 
+			//[GEC] Save SpecialColors
+		arc	<< sec->SpecialColors[sector_t::floor]
+			<< sec->SpecialColors[sector_t::ceiling]
+			<< sec->SpecialColors[sector_t::walltop]
+			<< sec->SpecialColors[sector_t::wallbottom]
+			<< sec->SpecialColors[sector_t::sprites];
+
+		arc	<< sec->SpecialColorsBase[sector_t::floor]
+			<< sec->SpecialColorsBase[sector_t::ceiling]
+			<< sec->SpecialColorsBase[sector_t::walltop]
+			<< sec->SpecialColorsBase[sector_t::wallbottom]
+			<< sec->SpecialColorsBase[sector_t::sprites];
+
 		sec->e->Serialize(arc);
 		if (arc.IsStoring ())
 		{
@@ -449,6 +464,9 @@ void P_SerializeWorld (FArchive &arc)
 				<< desaturate;
 			sec->ColorMap = GetSpecialLights (color, fade, desaturate);
 		}
+
+		arc << sec->EnvironmentSector;//[GEC] Set sound environment on Sector.
+
 		// begin of GZDoom additions
 		arc << sec->reflect[sector_t::ceiling] << sec->reflect[sector_t::floor];
 		// end of GZDoom additions

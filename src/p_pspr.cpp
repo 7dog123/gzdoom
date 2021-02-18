@@ -30,6 +30,9 @@
 #include "farchive.h"
 #include "d_player.h"
 
+static bool SetBob = false;//[GEC]
+static fixed_t OldX;//[GEC]
+static fixed_t OldY;//[GEC]
 
 // MACROS ------------------------------------------------------------------
 
@@ -134,7 +137,8 @@ void P_SetPsprite (player_t *player, int position, FState *state, bool nofunctio
 	}
 
 	psp = &player->psprites[position];
-	psp->processPending = false; // Do not subsequently perform periodic processing within the same tick.
+	//psp->processPending = false; // Do not subsequently perform periodic processing within the same tick.
+	psp->processPending = true; // [GEC] DOOM PC y DOOM 64 EX No tiene esta funcion, lo cual evita el retraso en los flash de las armas.
 
 	do
 	{
@@ -205,6 +209,8 @@ void P_BringUpWeapon (player_t *player)
 	FState *newstate;
 	AWeapon *weapon;
 
+	OldX = OldY = 0;//[GEC]
+
 	if (player->PendingWeapon == WP_NOCHANGE)
 	{
 		if (player->ReadyWeapon != NULL)
@@ -273,6 +279,11 @@ void P_FireWeapon (player_t *player, FState *state)
 	if (weapon == NULL || !weapon->CheckAmmo (AWeapon::PrimaryFire, true))
 	{
 		return;
+	}
+
+	if((weapon->WeaponFlags & WIF_GEC_CONSOLEBOBBING))//[GEC]
+	{
+		weapon->WeaponFlags |= WIF_GEC_STOPBOBBING;
 	}
 
 	player->mo->PlayAttacking ();
@@ -369,9 +380,11 @@ void P_BobWeapon (player_t *player, pspdef_t *psp, fixed_t *x, fixed_t *y)
 
 	weapon = player->ReadyWeapon;
 
-	if (weapon == NULL || weapon->WeaponFlags & WIF_DONTBOB)
+	//if (weapon == NULL || weapon->WeaponFlags & WIF_DONTBOB)
+	if (weapon == NULL || weapon->WeaponFlags & WIF_DONTBOB || weapon->WeaponFlags & WIF_GEC_STOPBOBBING)//[GEC]
 	{
 		*x = *y = 0;
+		OldX = OldY = 0;//[GEC]
 		return;
 	}
 
@@ -412,42 +425,66 @@ void P_BobWeapon (player_t *player, pspdef_t *psp, fixed_t *x, fixed_t *y)
 	{
 		fixed_t bobx = FixedMul(player->bob, rangex);
 		fixed_t boby = FixedMul(player->bob, rangey);
-		switch (bobstyle)
-		{
-		case AWeapon::BobNormal:
-			*x = FixedMul(bobx, finecosine[angle]);
-			*y = FixedMul(boby, finesine[angle & (FINEANGLES/2-1)]);
-			break;
-			
-		case AWeapon::BobInverse:
-			*x = FixedMul(bobx, finecosine[angle]);
-			*y = boby - FixedMul(boby, finesine[angle & (FINEANGLES/2-1)]);
-			break;
-			
-		case AWeapon::BobAlpha:
-			*x = FixedMul(bobx, finesine[angle]);
-			*y = FixedMul(boby, finesine[angle & (FINEANGLES/2-1)]);
-			break;
-			
-		case AWeapon::BobInverseAlpha:
-			*x = FixedMul(bobx, finesine[angle]);
-			*y = boby - FixedMul(boby, finesine[angle & (FINEANGLES/2-1)]);
-			break;
-			
-		case AWeapon::BobSmooth:
-			*x = FixedMul(bobx, finecosine[angle]);
-			*y = (boby - FixedMul(boby, finecosine[angle*2 & (FINEANGLES-1)])) / 2;
-			break;
 
-		case AWeapon::BobInverseSmooth:
-			*x = FixedMul(bobx, finecosine[angle]);
-			*y = (FixedMul(boby, finecosine[angle*2 & (FINEANGLES-1)]) + boby) / 2;
+		if(SetBob)//[GEC]
+		{
+			switch (bobstyle)
+			{
+			case AWeapon::BobNormal:
+				*x = OldX = FixedMul(bobx, finecosine[angle]);
+				*y = OldY =  FixedMul(boby, finesine[angle & (FINEANGLES/2-1)]);
+				break;
+				
+			case AWeapon::BobInverse:
+				*x = FixedMul(bobx, finecosine[angle]);
+				*y = boby - FixedMul(boby, finesine[angle & (FINEANGLES/2-1)]);
+				break;
+				
+			case AWeapon::BobAlpha:
+				*x = FixedMul(bobx, finesine[angle]);
+				*y = FixedMul(boby, finesine[angle & (FINEANGLES/2-1)]);
+				break;
+				
+			case AWeapon::BobInverseAlpha:
+				*x = FixedMul(bobx, finesine[angle]);
+				*y = boby - FixedMul(boby, finesine[angle & (FINEANGLES/2-1)]);
+				break;
+				
+			case AWeapon::BobSmooth:
+				*x = FixedMul(bobx, finecosine[angle]);
+				*y = (boby - FixedMul(boby, finecosine[angle*2 & (FINEANGLES-1)])) / 2;
+				break;
+
+			case AWeapon::BobInverseSmooth:
+				*x = FixedMul(bobx, finecosine[angle]);
+				*y = (FixedMul(boby, finecosine[angle*2 & (FINEANGLES-1)]) + boby) / 2;
+			}
+
+			//[GEC] Save xy
+			OldX = *x;
+			OldY = *y;
+
+			if (weapon->WeaponFlags & WIF_GEC_FORCEOLDBOBBING)//[GEC]
+				SetBob = false;
+		}
+		else
+		{
+			//[GEC] Set old xy
+			*x = OldX;
+			*y = OldY;
 		}
 	}
 	else
 	{
 		*x = 0;
 		*y = 0;
+
+		if((weapon->WeaponFlags & WIF_GEC_CONSOLEBOBBING))//[GEC]
+		{
+			//[GEC] Set old xy
+			*x = OldX;
+			*y = OldY;
+		}
 	}
 }
 
@@ -507,6 +544,11 @@ void DoReadyWeaponToFire (AActor *self, bool prim, bool alt)
 		return;
 	}
 
+	if((weapon->WeaponFlags & WIF_GEC_CONSOLEBOBBING))//[GEC]
+	{
+		weapon->WeaponFlags &= ~WIF_GEC_STOPBOBBING;//[GEC]
+	}
+
 	// Change player from attack state
 	if (self->InStateSequence(self->state, self->MissileState) ||
 		self->InStateSequence(self->state, self->MeleeState))
@@ -536,6 +578,7 @@ void DoReadyWeaponToBob (AActor *self)
 		self->player->WeaponState |= WF_WEAPONBOBBING;
 		self->player->psprites[ps_weapon].sx = 0;
 		self->player->psprites[ps_weapon].sy = WEAPONTOP;
+		SetBob = true;//[GEC]
 	}
 }
 

@@ -93,7 +93,7 @@ public:
 	static void StaticPreloadFonts();
 
 	// Return width of string in pixels (unscaled)
-	int StringWidth (const BYTE *str) const;
+	int StringWidth (const BYTE *str, bool lineonly = false) const;
 	inline int StringWidth (const char *str) const { return StringWidth ((const BYTE *)str); }
 
 	int GetCharCode(int code, bool needpic) const;

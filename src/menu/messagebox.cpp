@@ -45,6 +45,7 @@
 #include "c_dispatch.h"
 #include "g_game.h"
 
+extern int MenuAlpha; //[GEC]
 
 extern FSaveGameNode *quickSaveSlot;
 
@@ -155,11 +156,11 @@ void DMessageBoxMenu::HandleResult(bool res)
 			if (mAction == NAME_None) 
 			{
 				mParentMenu->MenuEvent(res? MKEY_MBYes : MKEY_MBNo, false);
-				Close();
+				Close(true);//[GEC]
 			}
 			else 
 			{
-				Close();
+				Close(true);//[GEC]
 				if (res) M_SetMenu(mAction, -1);
 			}
 			CloseSound();
@@ -192,7 +193,7 @@ void DMessageBoxMenu::Drawer ()
 		for (i = 0; mMessage[i].Width >= 0; i++)
 		{
 			screen->DrawText (SmallFont, CR_UNTRANSLATED, 160 - mMessage[i].Width/2, y, mMessage[i].Text,
-				DTA_Clean, true, TAG_DONE);
+				DTA_Clean, true, DTA_Alpha, MenuAlpha, TAG_DONE);//[GEC]
 			y += fontheight;
 		}
 	}
@@ -203,10 +204,10 @@ void DMessageBoxMenu::Drawer ()
 		mMouseY = y;
 		screen->DrawText(SmallFont, 
 			messageSelection == 0? OptionSettings.mFontColorSelection : OptionSettings.mFontColor, 
-			160, y, GStrings["TXT_YES"], DTA_Clean, true, TAG_DONE);
+			160, y, GStrings["TXT_YES"], DTA_Clean, true, DTA_Alpha, MenuAlpha, TAG_DONE);//[GEC]
 		screen->DrawText(SmallFont, 
 			messageSelection == 1? OptionSettings.mFontColorSelection : OptionSettings.mFontColor, 
-			160, y + fontheight + 1, GStrings["TXT_NO"], DTA_Clean, true, TAG_DONE);
+			160, y + fontheight + 1, GStrings["TXT_NO"], DTA_Clean, true, DTA_Alpha, MenuAlpha, TAG_DONE);//[GEC]
 
 		if (messageSelection >= 0)
 		{
@@ -218,7 +219,7 @@ void DMessageBoxMenu::Drawer ()
 					"\xd",
 					DTA_CellX, 8 * CleanXfac,
 					DTA_CellY, 8 * CleanYfac,
-					TAG_DONE);
+					DTA_Alpha, MenuAlpha, TAG_DONE);//[GEC]
 			}
 		}
 	}
@@ -250,14 +251,14 @@ bool DMessageBoxMenu::Responder(event_t *ev)
 		}
 		else
 		{
-			Close();
+			Close(true);//[GEC]
 			return true;
 		}
 		return false;
 	}
 	else if (ev->type == EV_KeyDown)
 	{
-		Close();
+		Close(true);//[GEC]
 		return true;
 	}
 	return Super::Responder(ev);
@@ -294,7 +295,7 @@ bool DMessageBoxMenu::MenuEvent(int mkey, bool fromcontroller)
 	}
 	else
 	{
-		Close();
+		Close(true);//[GEC]
 		CloseSound();
 		return true;
 	}
@@ -482,12 +483,12 @@ void DEndGameMenu::HandleResult(bool res)
 		M_ClearMenus ();
 		if (!netgame)
 		{
-			D_StartTitle ();
+			D_StartTitle (true);//[GEC]
 		}
 	}
 	else
 	{
-		Close();
+		Close(true);//[GEC]
 		CloseSound();
 	}
 }
@@ -566,7 +567,7 @@ void DQuickSaveMenu::HandleResult(bool res)
 	}
 	else
 	{
-		Close();
+		Close(true);//[GEC]
 		CloseSound();
 	}
 }
@@ -653,7 +654,7 @@ void DQuickLoadMenu::HandleResult(bool res)
 	}
 	else
 	{
-		Close();
+		Close(true);//[GEC]
 		CloseSound();
 	}
 }

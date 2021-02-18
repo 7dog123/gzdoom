@@ -53,6 +53,9 @@
 
 #include "optionmenuitems.h"
 
+extern bool GameMenuEnabled; //[GEC]
+extern bool MenuFade; //[GEC]
+
 void ClearSaveGames();
 
 MenuDescriptorList MenuDescriptors;
@@ -244,6 +247,14 @@ static void ParseListMenuBody(FScanner &sc, FListMenuDescriptor *desc)
 			}
 			desc->mClass = cls;
 		}
+		else if (sc.Compare("resolution"))//[GEC]
+		{
+			sc.MustGetNumber();
+			desc->mResW = sc.Number;
+			sc.MustGetToken(',');
+			sc.MustGetNumber();
+			desc->mResH = sc.Number;
+		}
 		else if (sc.Compare("Selector"))
 		{
 			sc.MustGetString();
@@ -292,7 +303,7 @@ static void ParseListMenuBody(FScanner &sc, FListMenuDescriptor *desc)
 			sc.MustGetString();
 			FTextureID tex = GetMenuTexture(sc.String);
 
-			FListMenuItem *it = new FListMenuItemStaticPatch(x, y, tex, centered);
+			FListMenuItem *it = new FListMenuItemStaticPatch(x, y, tex, centered, desc->mResW, desc->mResH);//[GEC]
 			desc->mItems.Push(it);
 		}
 		else if (sc.Compare("StaticText") || sc.Compare("StaticTextCentered"))
@@ -305,7 +316,7 @@ static void ParseListMenuBody(FScanner &sc, FListMenuDescriptor *desc)
 			int y = sc.Number;
 			sc.MustGetStringName(",");
 			sc.MustGetString();
-			FListMenuItem *it = new FListMenuItemStaticText(x, y, sc.String, desc->mFont, desc->mFontColor, centered);
+			FListMenuItem *it = new FListMenuItemStaticText(x, y, sc.String, desc->mFont, desc->mFontColor, centered, desc->mResW, desc->mResH);//[GEC]
 			desc->mItems.Push(it);
 		}
 		else if (sc.Compare("PatchItem"))
@@ -325,7 +336,7 @@ static void ParseListMenuBody(FScanner &sc, FListMenuDescriptor *desc)
 				param = sc.Number;
 			}
 
-			FListMenuItem *it = new FListMenuItemPatch(desc->mXpos, desc->mYpos, desc->mLinespacing, hotkey, tex, action, param);
+			FListMenuItem *it = new FListMenuItemPatch(desc->mXpos, desc->mYpos, desc->mLinespacing, hotkey, tex, action, param, desc->mResW, desc->mResH);//[GEC]
 			desc->mItems.Push(it);
 			desc->mYpos += desc->mLinespacing;
 			if (desc->mSelectedItem == -1) desc->mSelectedItem = desc->mItems.Size()-1;
@@ -347,7 +358,7 @@ static void ParseListMenuBody(FScanner &sc, FListMenuDescriptor *desc)
 				param = sc.Number;
 			}
 
-			FListMenuItem *it = new FListMenuItemText(desc->mXpos, desc->mYpos, desc->mLinespacing, hotkey, text, desc->mFont, desc->mFontColor, desc->mFontColor2, action, param);
+			FListMenuItem *it = new FListMenuItemText(desc->mXpos, desc->mYpos, desc->mLinespacing, hotkey, text, desc->mFont, desc->mFontColor, desc->mFontColor2, action, param, desc->mResW, desc->mResH);//[GEC]
 			desc->mItems.Push(it);
 			desc->mYpos += desc->mLinespacing;
 			if (desc->mSelectedItem == -1) desc->mSelectedItem = desc->mItems.Size()-1;
@@ -460,6 +471,36 @@ static void ParseListMenuBody(FScanner &sc, FListMenuDescriptor *desc)
 			desc->mYpos += desc->mLinespacing;
 			if (desc->mSelectedItem == -1) desc->mSelectedItem = desc->mItems.Size()-1;
 		}
+
+		else if (sc.Compare("GameOption"))//[GEC]
+		{
+			int type = 1;
+			sc.MustGetString();
+			if (sc.Compare("Episode")){type = 1;}
+			else if (sc.Compare("Skill")){type = 2;}
+
+			sc.MustGetStringName(",");
+
+			sc.MustGetString();
+			FString text = sc.String;
+			sc.MustGetStringName(",");
+			sc.MustGetString();
+			int hotkey = sc.String[0];
+			sc.MustGetStringName(",");
+			sc.MustGetString();
+			FName action = sc.String;
+			int param = 0;
+			if (sc.CheckString(","))
+			{
+				sc.MustGetNumber();
+				param = sc.Number;
+			}
+
+			FListMenuItem *it = new FListMenuItemText2(type, desc->mXpos, desc->mYpos, desc->mLinespacing, hotkey, text, desc->mFont, desc->mFontColor, desc->mFontColor2, action, param, desc->mResW, desc->mResH);//[GEC]
+			desc->mItems.Push(it);
+			desc->mYpos += desc->mLinespacing + 17;
+			if (desc->mSelectedItem == -1) desc->mSelectedItem = desc->mItems.Size()-1;//*/
+		}
 		else
 		{
 			sc.ScriptError("Unknown keyword '%s'", sc.String);
@@ -508,6 +549,9 @@ static void ParseListMenu(FScanner &sc)
 {
 	sc.MustGetString();
 
+	if (sc.Compare("Gamemenu"))
+		GameMenuEnabled = true;//[GEC]
+
 	FListMenuDescriptor *desc = new FListMenuDescriptor;
 	desc->mType = MDESC_ListMenu;
 	desc->mMenuName = sc.String;
@@ -529,6 +573,10 @@ static void ParseListMenu(FScanner &sc)
 	desc->mWLeft = 0;
 	desc->mWRight = 0;
 	desc->mCenter = false;
+
+	desc->mNoDim = false;//[GEC]
+	desc->mResW = DefaultListMenuSettings.mResW;//[GEC]
+	desc->mResH = DefaultListMenuSettings.mResH;//[GEC]
 
 	ParseListMenuBody(sc, desc);
 	bool scratch = ReplaceMenu(sc, desc);
@@ -999,6 +1047,10 @@ void M_ParseMenuDefs()
 					I_FatalError("You cannot add menu items to the menu default settings.");
 				}
 			}
+			else if (sc.Compare("MENUFADE"))//[GEC]
+			{
+				MenuFade = true;//[GEC]
+			}
 			else
 			{
 				sc.ScriptError("Unknown keyword '%s'", sc.String);
@@ -1059,12 +1111,12 @@ static void BuildEpisodeMenu()
 					{
 						FTextureID tex = GetMenuTexture(AllEpisodes[i].mPicName);
 						it = new FListMenuItemPatch(ld->mXpos, posy, ld->mLinespacing, AllEpisodes[i].mShortcut, 
-							tex, NAME_Skillmenu, i);
+							tex, NAME_Skillmenu, i, ld->mResW, ld->mResH);//[GEC]
 					}
 					else
 					{
 						it = new FListMenuItemText(ld->mXpos, posy, ld->mLinespacing, AllEpisodes[i].mShortcut, 
-							AllEpisodes[i].mEpisodeName, ld->mFont, ld->mFontColor, ld->mFontColor2, NAME_Skillmenu, i);
+							AllEpisodes[i].mEpisodeName, ld->mFont, ld->mFontColor, ld->mFontColor2, NAME_Skillmenu, i, ld->mResW, ld->mResH);//[GEC]
 					}
 					ld->mItems.Push(it);
 					posy += ld->mLinespacing;
@@ -1455,14 +1507,14 @@ void M_StartupSkillMenu(FGameStartup *gs)
 				if (skill.PicName.Len() != 0 && pItemText == NULL)
 				{
 					FTextureID tex = GetMenuTexture(skill.PicName);
-					li = new FListMenuItemPatch(ld->mXpos, y, ld->mLinespacing, skill.Shortcut, tex, action, i);
+					li = new FListMenuItemPatch(ld->mXpos, y, ld->mLinespacing, skill.Shortcut, tex, action, i, ld->mResW, ld->mResH);//[GEC]
 				}
 				else
 				{
 					EColorRange color = (EColorRange)skill.GetTextColor();
 					if (color == CR_UNTRANSLATED) color = ld->mFontColor;
 					li = new FListMenuItemText(x, y, ld->mLinespacing, skill.Shortcut, 
-									pItemText? *pItemText : skill.MenuName, ld->mFont, color,ld->mFontColor2, action, i);
+									pItemText? *pItemText : skill.MenuName, ld->mFont, color,ld->mFontColor2, action, i, ld->mResW, ld->mResH);//[GEC]
 				}
 				ld->mItems.Push(li);
 				y += ld->mLinespacing;
