@@ -53,7 +53,12 @@ extern HINSTANCE g_hInst;
 #include <math.h>
 
 #include "except.h"
+#ifdef __ANDROID__
+#include "fmodsound_studio.h"
+#else
 #include "fmodsound.h"
+#endif
+
 #include "oalsound.h"
 
 #include "mpg123_decoder.h"

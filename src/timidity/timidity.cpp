@@ -378,7 +378,7 @@ static int read_config_file(const char *name, bool ismain)
 			}
 			bank->tone[i].note = bank->tone[i].pan =
 				bank->tone[i].fontbank = bank->tone[i].fontpreset =
-				bank->tone[i].fontnote = bank->tone[i].strip_loop = 
+				bank->tone[i].fontnote = bank->tone[i].strip_loop =
 				bank->tone[i].strip_envelope = bank->tone[i].strip_tail = -1;
 
 			if (!strcmp(w[1], "%font"))
@@ -670,7 +670,7 @@ int LoadDMXGUS()
 		int val = k % 128;
 		bank->tone[val].note = bank->tone[val].pan =
 			bank->tone[val].fontbank = bank->tone[val].fontpreset =
-			bank->tone[val].fontnote = bank->tone[val].strip_loop = 
+			bank->tone[val].fontnote = bank->tone[val].strip_loop =
 			bank->tone[val].strip_envelope = bank->tone[val].strip_tail = -1;
 		bank->tone[val].name = patches[j];
 	}

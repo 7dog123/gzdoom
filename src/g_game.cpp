@@ -540,6 +540,7 @@ static inline int joyint(double val)
 	}
 }
 
+<<<<<<< HEAD
 #define	BT_L2	   2 //prevweapon
 #define	BT_R2	   3 //nexweapon
 #define	BT_L1	   4 //strafeleft
@@ -877,6 +878,11 @@ fixed_t	A_Angleturn[] =
 	200,200,332,332,400,464,525,600,600,664,		//Angleturn
     525,525,600,664,664,800,800,864,864,932,		//FastAngleturn
 };
+=======
+#ifdef __MOBILE__
+extern void Mobile_IN_Move(ticcmd_t* cmd );
+#endif
+>>>>>>> 83c1698d63b121a26ddf5321f3d9dc7ef8b6bb26
 
 //
 // G_BuildTiccmd
@@ -1170,6 +1176,10 @@ void G_BuildTiccmd (ticcmd_t *cmd)
 	{
 		forward += (int)((float)mousey * m_forward);
 	}
+
+#ifdef __MOBILE__
+    Mobile_IN_Move(cmd);
+#endif
 
 	cmd->ucmd.pitch = LocalViewPitch >> 16;
 

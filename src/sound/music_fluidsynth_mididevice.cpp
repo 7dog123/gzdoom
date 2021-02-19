@@ -91,8 +91,11 @@
 // PRIVATE DATA DEFINITIONS ------------------------------------------------
 
 // PUBLIC DATA DEFINITIONS -------------------------------------------------
-
+#ifdef __ANDROID__
+CVAR(String, fluid_patchset, "./gzdoom.sf2", 0)
+#else
 CVAR(String, fluid_patchset, "", CVAR_ARCHIVE|CVAR_GLOBALCONFIG)
+#endif
 
 CUSTOM_CVAR(Float, fluid_gain, 0.5, CVAR_ARCHIVE|CVAR_GLOBALCONFIG)
 {
@@ -283,6 +286,8 @@ FluidSynthMIDIDevice::FluidSynthMIDIDevice(const char *args)
 	fluid_settings_setint(FluidSettings, "synth.polyphony", fluid_voices);
 	fluid_settings_setint(FluidSettings, "synth.cpu-cores", fluid_threads);
 	FluidSynth = new_fluid_synth(FluidSettings);
+
+
 	if (FluidSynth == NULL)
 	{
 		Printf("Failed to create FluidSynth.\n");
@@ -392,7 +397,7 @@ void FluidSynthMIDIDevice::HandleEvent(int status, int parm1, int parm2)
 {
 	int command = status & 0xF0;
 	int channel = status & 0x0F;
-	
+
 	switch (command)
 	{
 	case MIDI_NOTEOFF:
@@ -436,7 +441,9 @@ void FluidSynthMIDIDevice::HandleLongEvent(const BYTE *data, int len)
 {
 	if (len > 1 && (data[0] == 0xF0 || data[0] == 0xF7))
 	{
+#ifndef __ANDROID__
 		fluid_synth_sysex(FluidSynth, (const char *)data + 1, len - 1, NULL, NULL, NULL, 0);
+#endif
 	}
 }
 
@@ -619,7 +626,11 @@ FString FluidSynthMIDIDevice::GetStats()
 
 	CritSec.Enter();
 	int polyphony = fluid_synth_get_polyphony(FluidSynth);
+#ifdef __ANDROID__
+    int voices = 0;
+#else
 	int voices = fluid_synth_get_active_voice_count(FluidSynth);
+#endif
 	double load = fluid_synth_get_cpu_load(FluidSynth);
 	char *chorus, *reverb;
 	int maxpoly;

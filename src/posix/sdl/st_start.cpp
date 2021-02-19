@@ -44,6 +44,27 @@
 #include "i_system.h"
 #include "c_cvars.h"
 
+#ifdef __ANDROID__
+#include "JNITouchControlsUtils.h"
+#include <android/log.h>
+#define LOG_TAG "JWZGLES"
+#define LOGI(...)  __android_log_print(ANDROID_LOG_INFO,"NETOWRK",__VA_ARGS__)
+#define fprintf my_fprintf
+
+
+
+void my_fprintf(FILE * x, const char *format, ...)
+{
+	FString str;
+	va_list argptr;
+
+	va_start (argptr, format);
+	str.VFormat (format, argptr);
+	va_end (argptr);
+	//fprintf (stderr, "\r%-40s\n", str.GetChars());
+}
+
+#endif
 // MACROS ------------------------------------------------------------------
 
 // TYPES -------------------------------------------------------------------
@@ -194,6 +215,7 @@ void FTTYStartupScreen::NetInit(const char *message, int numplayers)
 		rawtermios.c_lflag &= ~(ICANON | ECHO);
 		tcsetattr (STDIN_FILENO, TCSANOW, &rawtermios);
 		DidNetInit = true;
+
 	}
 	if (numplayers == 1)
 	{
@@ -244,7 +266,7 @@ void FTTYStartupScreen::NetMessage(const char *format, ...)
 {
 	FString str;
 	va_list argptr;
-	
+
 	va_start (argptr, format);
 	str.VFormat (format, argptr);
 	va_end (argptr);
@@ -350,5 +372,9 @@ bool FTTYStartupScreen::NetLoop(bool (*timer_callback)(void *), void *userdata)
 void ST_Endoom()
 {
 	I_ShutdownJoysticks();
+#ifdef __ANDROID__
+	void STACK_ARGS call_terms ();
+	call_terms();
+#endif
 	exit(0);
 }

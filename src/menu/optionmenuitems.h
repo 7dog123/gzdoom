@@ -376,13 +376,14 @@ public:
 #ifndef NO_IMP
 IMPLEMENT_ABSTRACT_CLASS(DEnterKey)
 #endif
-
+#ifdef __MOBILE__
+extern bool g_bindingbutton;
+#endif
 //=============================================================================
 //
 // // Edit a key binding, Action is the CCMD to bind
 //
 //=============================================================================
-
 class FOptionMenuItemControl : public FOptionMenuItem
 {
 	FKeyBindings *mBindings;
@@ -427,6 +428,9 @@ public:
 		if (mkey == MKEY_Input)
 		{
 			mWaiting = false;
+#ifdef __MOBILE__
+            g_bindingbutton = false;
+#endif
 			mBindings->SetBind(mInput, mAction);
 			return true;
 		}
@@ -438,6 +442,9 @@ public:
 		else if (mkey == MKEY_Abort)
 		{
 			mWaiting = false;
+#ifdef __MOBILE__
+            g_bindingbutton = false;
+#endif
 			return true;
 		}
 		return false;
@@ -447,6 +454,10 @@ public:
 	{
 		S_Sound (CHAN_VOICE | CHAN_UI, "menu/choose", snd_menuvolume, ATTN_NONE);
 		mWaiting = true;
+#ifdef __MOBILE__
+		mBindings->UnbindACommand(mAction); //Only allow one button to be bound to avoid confusion
+		g_bindingbutton = true;
+#endif
 		DMenu *input = new DEnterKey(DMenu::CurrentMenu, &mInput);
 		M_ActivateMenu(input, true);//[GEC]
 		return true;

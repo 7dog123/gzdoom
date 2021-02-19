@@ -1,4 +1,4 @@
-// Emacs style mode select	 -*- C++ -*- 
+// Emacs style mode select	 -*- C++ -*-
 //-----------------------------------------------------------------------------
 //
 // $Id:$
@@ -71,6 +71,8 @@
 #include "m_fixed.h"
 #include "g_level.h"
 
+#include <time.h>
+
 #ifdef __APPLE__
 #include <ApplicationServices/ApplicationServices.h>
 #endif // __APPLE__
@@ -90,7 +92,7 @@ int I_PickIWad_Cocoa (WadStuff *wads, int numwads, bool showwin, int defaultiwad
 #endif
 
 DWORD LanguageIDs[4];
-	
+
 int (*I_GetTime) (bool saveMS);
 int (*I_WaitForTic) (int);
 void (*I_FreezeTime) (bool frozen);
@@ -163,7 +165,7 @@ void I_Quit (void)
     if (demorecording)
 		G_CheckDemoStatus();
 
-	C_DeinitConsole();
+	//C_DeinitConsole();
 
 	I_ShutdownTimer();
 }
@@ -177,6 +179,15 @@ bool gameisdead;
 
 #ifdef __APPLE__
 void Mac_I_FatalError(const char* errortext);
+#endif
+
+
+#ifdef __ANDROID__
+#include <android/log.h>
+#define LOGI(...) ((void)__android_log_print(ANDROID_LOG_INFO,"Gzdoom", __VA_ARGS__))
+#define LOGW(...) ((void)__android_log_print(ANDROID_LOG_WARN, "Gzdoom", __VA_ARGS__))
+#define LOGE(...) ((void)__android_log_print(ANDROID_LOG_ERROR,"Gzdoom", __VA_ARGS__))
+//#include "LogWritter.h"
 #endif
 
 void STACK_ARGS I_FatalError (const char *error, ...)
@@ -196,8 +207,12 @@ void STACK_ARGS I_FatalError (const char *error, ...)
 
 #ifdef __APPLE__
 		Mac_I_FatalError(errortext);
-#endif // __APPLE__		
-		
+#endif // __APPLE__
+
+#ifdef __ANDROID__
+        LOGI("FATAL ERROR: %s", errortext);
+        //LogWritter_Write(errortext);
+#endif
 		// Record error to log (if logging)
 		if (Logfile)
 		{
@@ -409,13 +424,13 @@ int I_PickIWad_Gtk (WadStuff *wads, int numwads, bool showwin, int defaultiwad)
 	{
 		GtkTreeModel *model;
 		GValue value = { 0, { {0} } };
-		
+
 		// Find out which IWAD was selected.
 		gtk_tree_selection_get_selected (selection, &model, &iter);
 		gtk_tree_model_get_value (GTK_TREE_MODEL(model), &iter, 2, &value);
 		i = g_value_get_int (&value);
 		g_value_unset (&value);
-		
+
 		// Set state of queryiwad based on the checkbox.
 		queryiwad = !gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON(check));
 	}
@@ -423,7 +438,7 @@ int I_PickIWad_Gtk (WadStuff *wads, int numwads, bool showwin, int defaultiwad)
 	{
 		i = -1;
 	}
-	
+
 	if (GTK_IS_WINDOW(window))
 	{
 		gtk_widget_destroy (window);
@@ -504,7 +519,7 @@ int I_PickIWad (WadStuff *wads, int numwads, bool showwin, int defaultiwad)
 #elif defined(__APPLE__)
 	return I_PickIWad_Cocoa (wads, numwads, showwin, defaultiwad);
 #endif
-	
+
 	printf ("Please select a game wad (or 0 to exit):\n");
 	for (i = 0; i < numwads; ++i)
 	{
@@ -542,7 +557,7 @@ static int matchfile (const struct dirent *ent)
 void *I_FindFirst (const char *filespec, findstate_t *fileinfo)
 {
 	FString dir;
-	
+
 	const char *slash = strrchr (filespec, '/');
 	if (slash)
 	{

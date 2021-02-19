@@ -169,6 +169,10 @@ void I_SetMouseCapture()
 	// Clear out any mouse movement.
 	SDL_GetRelativeMouseState (NULL, NULL);
 	SDL_SetRelativeMouseMode (SDL_TRUE);
+#ifdef __MOBILE__
+    // Need to clear this again because setting mode above adds relative values
+    SDL_GetRelativeMouseState (NULL, NULL);
+#endif
 }
 
 void I_ReleaseMouseCapture()
@@ -180,7 +184,7 @@ static void PostMouseMove (int x, int y)
 {
 	static int lastx = 0, lasty = 0;
 	event_t ev = { 0,0,0,0,0,0,0 };
-	
+
 	if (m_filter)
 	{
 		ev.x = (x + lastx) / 2;
@@ -245,7 +249,7 @@ static void I_CheckNativeMouse ()
 {
 	bool focus = SDL_GetKeyboardFocus() != NULL;
 	bool fs = screen->IsFullscreen();
-	
+
 	bool wantNative = !focus || (!use_mouse || GUICapture || paused || demoplayback || !inGame());
 
 	if (wantNative != NativeMouse)
@@ -264,7 +268,7 @@ void MessagePump (const SDL_Event &sev)
 	static int lastx = 0, lasty = 0;
 	int x, y;
 	event_t event = { 0,0,0,0,0,0,0 };
-	
+
 	switch (sev.type)
 	{
 	case SDL_QUIT:
@@ -434,6 +438,15 @@ void MessagePump (const SDL_Event &sev)
 				event.data1 = toupper(event.data1);
 				D_PostEvent (&event);
 			}
+
+            if ( (event.data1 > GK_CESCAPE) && (event.data1 < 256) && (event.subtype != EV_GUI_KeyUp))
+            {
+                LOGI("Sending CHAR");
+                event.type = EV_GUI_Event;
+                event.subtype = EV_GUI_Char;
+                //event.data1 = sev.text.text[0];
+                D_PostEvent (&event);
+            }
 		}
 		break;
 
@@ -463,7 +476,7 @@ void MessagePump (const SDL_Event &sev)
 void I_GetEvent ()
 {
 	SDL_Event sev;
-	
+
 	while (SDL_PollEvent (&sev))
 	{
 		MessagePump (sev);

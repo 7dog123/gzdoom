@@ -659,6 +659,12 @@ int FPNGTexture::CopyTrueColorPixels(FBitmap *bmp, int x, int y, int rotate, FCo
 						transpal = true;
 				}
 			}
+#ifdef __ANDROID__ // Backport this important fix! Fixes random crash when reading some PNGs
+            else
+            {
+                lump->Seek(len, SEEK_CUR);
+            }
+#endif
 			break;
 		}
 		lump->Seek(4, SEEK_CUR);		// Skip CRC

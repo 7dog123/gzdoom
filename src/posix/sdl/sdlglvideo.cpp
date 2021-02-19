@@ -25,6 +25,11 @@
 #include "gl/textures/gl_material.h"
 #include "gl/system/gl_cvars.h"
 
+#ifdef __ANDROID__
+#include "m_argv.h"
+
+#define SDL_WINDOW_FULLSCREEN_DESKTOP SDL_WINDOW_FULLSCREEN
+#endif
 // MACROS ------------------------------------------------------------------
 
 // TYPES -------------------------------------------------------------------
@@ -166,7 +171,7 @@ DFrameBuffer *SDLGLVideo::CreateFrameBuffer (int width, int height, bool fullscr
 {
 	static int retry = 0;
 	static int owidth, oheight;
-	
+
 	PalEntry flashColor;
 //	int flashAmount;
 
@@ -177,10 +182,10 @@ DFrameBuffer *SDLGLVideo::CreateFrameBuffer (int width, int height, bool fullscr
 			fb->Height == height)
 		{
 			bool fsnow = (SDL_GetWindowFlags (fb->Screen) & SDL_WINDOW_FULLSCREEN_DESKTOP) != 0;
-	
+
 			if (fsnow != fullscreen)
 			{
-				SDL_SetWindowFullscreen (fb->Screen, fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0);
+				//SDL_SetWindowFullscreen (fb->Screen, fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0);
 			}
 			return old;
 		}
@@ -192,10 +197,10 @@ DFrameBuffer *SDLGLVideo::CreateFrameBuffer (int width, int height, bool fullscr
 		flashColor = 0;
 //		flashAmount = 0;
 	}
-	
+
 	SDLGLFB *fb = new OpenGLFrameBuffer (0, width, height, 32, 60, fullscreen);
 	retry = 0;
-	
+
 	// If we could not create the framebuffer, try again with slightly
 	// different parameters in this order:
 	// 1. Try with the closest size
@@ -264,7 +269,7 @@ bool SDLGLVideo::SetResolution (int width, int height, int bits)
 #else
 	bits=24;
 #endif
-	
+
 	V_DoModeSetup(width, height, bits);
 #endif
 	return true;	// We must return true because the old video context no longer exists.
@@ -272,10 +277,12 @@ bool SDLGLVideo::SetResolution (int width, int height, int bits)
 
 //==========================================================================
 //
-// 
+//
 //
 //==========================================================================
-
+#ifdef __ANDROID__
+extern int glesLoad;
+#endif
 bool SDLGLVideo::SetupPixelFormat(bool allowsoftware, int multisample)
 {
 	SDL_GL_SetAttribute( SDL_GL_RED_SIZE,  8 );
@@ -283,18 +290,24 @@ bool SDLGLVideo::SetupPixelFormat(bool allowsoftware, int multisample)
 	SDL_GL_SetAttribute( SDL_GL_BLUE_SIZE,  8 );
 	SDL_GL_SetAttribute( SDL_GL_ALPHA_SIZE,  8 );
 	SDL_GL_SetAttribute( SDL_GL_DEPTH_SIZE,  24 );
+#ifdef __ANDROID__
+    SDL_GL_SetAttribute( SDL_GL_DEPTH_SIZE, 16 ); // Defaults to 24 which is not needed and fails on old Tegras
+#endif
 	SDL_GL_SetAttribute( SDL_GL_STENCIL_SIZE,  8 );
 	SDL_GL_SetAttribute( SDL_GL_DOUBLEBUFFER,  1 );
 	if (multisample > 0) {
 		SDL_GL_SetAttribute( SDL_GL_MULTISAMPLEBUFFERS, 1 );
 		SDL_GL_SetAttribute( SDL_GL_MULTISAMPLESAMPLES, multisample );
 	}
+
+    glesLoad = 1;
+
 	return true;
 }
 
 //==========================================================================
 //
-// 
+//
 //
 //==========================================================================
 
@@ -319,11 +332,11 @@ SDLGLFB::SDLGLFB (void *, int width, int height, int, int, bool fullscreen)
 	if (localmultisample<0) localmultisample=gl_vid_multisample;
 
 	int i;
-	
+
 	m_Lock=0;
 
 	UpdatePending = false;
-	
+
 	if (!static_cast<SDLGLVideo*>(Video)->InitHardware(false, localmultisample))
 	{
 		vid_renderer = 0;
@@ -367,7 +380,7 @@ SDLGLFB::~SDLGLFB ()
 
 
 
-void SDLGLFB::InitializeState() 
+void SDLGLFB::InitializeState()
 {
 }
 
@@ -397,13 +410,13 @@ bool SDLGLFB::Lock(bool buffered)
 	return true;
 }
 
-bool SDLGLFB::Lock () 
-{ 	
-	return Lock(false); 
+bool SDLGLFB::Lock ()
+{
+	return Lock(false);
 }
 
-void SDLGLFB::Unlock () 	
-{ 
+void SDLGLFB::Unlock ()
+{
 	if (UpdatePending && m_Lock == 1)
 	{
 		Update ();
@@ -414,8 +427,8 @@ void SDLGLFB::Unlock ()
 	}
 }
 
-bool SDLGLFB::IsLocked () 
-{ 
+bool SDLGLFB::IsLocked ()
+{
 	return m_Lock>0;// true;
 }
 

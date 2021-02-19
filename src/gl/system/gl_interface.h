@@ -42,7 +42,9 @@ struct RenderContext
 	unsigned int maxuniforms;
 	int max_texturesize;
 	char * vendorstring;
-
+#ifdef __MOBILE__
+    bool npot;
+#endif
 	int MaxLights() const
 	{
 		return maxuniforms>=2048? 128:64;

@@ -2,6 +2,8 @@
 #ifndef FMOD_WRAP_H
 #define FMOD_WRAP_H
 
+#define FMOD_SOFTWARE 0
+
 #ifndef NO_FMOD
 
 #if !defined(_WIN32) || defined(_MSC_VER)

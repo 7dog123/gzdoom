@@ -72,7 +72,19 @@ unsigned int FHardwareTexture::lastbound[FHardwareTexture::MAX_TEXTURES];
 int FHardwareTexture::GetTexDimension(int value)
 {
 	if (value > gl.max_texturesize) return gl.max_texturesize;
-	return value;
+#ifdef __MOBILE__
+    if( gl.npot == true )
+    {
+        return value;
+    }
+    else
+    {
+        int i=1;
+        while (i<value) i+=i;
+        return i;
+     }
+#endif
+    return value;
 }
 
 
@@ -173,7 +185,55 @@ void FHardwareTexture::Resize(int width, int height, unsigned char *src_data, un
 	}
 }
 
+#ifdef __MOBILE__
+static void GL_ResampleTexture (uint32_t *in, uint32_t inwidth, uint32_t inheight, uint32_t *out,  uint32_t outwidth, uint32_t outheight)
+{
+	//LOGI("GL_ResampleTexture %dx%d -> %dx%d",inwidth,inheight,outwidth,outheight);
 
+	int		i, j;
+	uint32_t	*inrow, *inrow2;
+	uint32_t	frac, fracstep;
+	uint8_t		*pix1, *pix2, *pix3, *pix4;
+	uint32_t	*p1 = (uint32_t*)malloc(sizeof(uint32_t) * outwidth );
+	uint32_t	*p2 = (uint32_t*)malloc(sizeof(uint32_t) * outwidth );
+
+	fracstep = inwidth*0x10000/outwidth;
+
+	frac = fracstep>>2;
+	for (i=0 ; i<outwidth ; i++)
+	{
+		p1[i] = 4*(frac>>16);
+		frac += fracstep;
+	}
+	frac = 3*(fracstep>>2);
+	for (i=0 ; i<outwidth ; i++)
+	{
+		p2[i] = 4*(frac>>16);
+		frac += fracstep;
+	}
+
+	for (i=0 ; i<outheight ; i++, out += outwidth)
+	{
+		inrow = in + inwidth*(int)((i+0.25)*inheight/outheight);
+		inrow2 = in + inwidth*(int)((i+0.75)*inheight/outheight);
+		frac = fracstep >> 1;
+		for (j=0 ; j<outwidth ; j++)
+		{
+			pix1 = (uint8_t *)inrow + p1[j];
+			pix2 = (uint8_t *)inrow + p2[j];
+			pix3 = (uint8_t *)inrow2 + p1[j];
+			pix4 = (uint8_t *)inrow2 + p2[j];
+			((uint8_t *)(out+j))[0] = (pix1[0] + pix2[0] + pix3[0] + pix4[0])>>2;
+			((uint8_t *)(out+j))[1] = (pix1[1] + pix2[1] + pix3[1] + pix4[1])>>2;
+			((uint8_t *)(out+j))[2] = (pix1[2] + pix2[2] + pix3[2] + pix4[2])>>2;
+			((uint8_t *)(out+j))[3] = (pix1[3] + pix2[3] + pix3[3] + pix4[3])>>2;
+		}
+	}
+
+	free(p1);
+	free(p2);
+}
+#endif
 //===========================================================================
 // 
 //	Loads the texture image into the hardware
@@ -189,7 +249,8 @@ void FHardwareTexture::LoadImage(unsigned char * buffer,int w, int h, unsigned i
 	int texformat=TexFormat[gl_texture_format];
 	bool deletebuffer=false;
 	bool use_mipmapping = TexFilter[gl_texture_filter].mipmapping;
-
+//use_mipmapping = false;
+//forcenofiltering= true;
 	if (alphatexture) texformat=GL_ALPHA8;
 	else if (forcenocompression) texformat = GL_RGBA8;
 	if (glTexID==0) glGenTextures(1,&glTexID);
@@ -217,7 +278,10 @@ void FHardwareTexture::LoadImage(unsigned char * buffer,int w, int h, unsigned i
 
 		glTexParameteri(GL_TEXTURE_2D, GL_GENERATE_MIPMAP, (mipmap && use_mipmapping && !forcenofiltering));
 
-		if (rw < w || rh < h)
+	    if (rw == w && rh == h) // Same size, do nothing
+		{
+		}
+		else if (rw < w || rh < h) // Need to make smaller
 		{
 			// The texture is larger than what the hardware can handle so scale it down.
 			unsigned char * scaledbuffer=(unsigned char *)calloc(4,rw * (rh+1));
@@ -228,8 +292,31 @@ void FHardwareTexture::LoadImage(unsigned char * buffer,int w, int h, unsigned i
 				buffer=scaledbuffer;
 			}
 		}
+		else if (wrapparam==GL_REPEAT) // Need to make bigger by resampling, for 3d textures
+		{
+		    unsigned int * scaledbuffer=(unsigned int *)calloc(4,rw * (rh+1));
+        	GL_ResampleTexture((unsigned  *)buffer,w,h,(unsigned *)scaledbuffer,rw,rh);
+        	deletebuffer=true;
+            buffer=(unsigned char *)scaledbuffer;
+		}
+		else // Need to put into bigger texture, but DONT resample, for 2d images. Works because coordinates are scaled when rendering
+		{
+			unsigned int * scaledbuffer=(unsigned int *)calloc(4,rw * (rh+1));
+            for(int y = 0; y < h; y++)
+                for( int x = 0; x < w; x++ )
+                {
+                    scaledbuffer[x + y * rw] = ((unsigned int *)buffer)[x + y * w];
+                }
+		    deletebuffer=true;
+		    buffer=(unsigned char *)scaledbuffer;
+		}
+
 	}
-	glTexImage2D(GL_TEXTURE_2D, 0, texformat, rw, rh, 0, GL_RGBA, GL_UNSIGNED_BYTE, buffer);
+#ifdef __MOBILE__
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, rw, rh, 0, GL_RGBA, GL_UNSIGNED_BYTE, buffer);
+#else
+    glTexImage2D(GL_TEXTURE_2D, 0, texformat, rw, rh, 0, GL_RGBA, GL_UNSIGNED_BYTE, buffer);
+#endif
 
 	if (deletebuffer) free(buffer);
 
@@ -244,20 +331,25 @@ void FHardwareTexture::LoadImage(unsigned char * buffer,int w, int h, unsigned i
 	{
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+#ifndef __MOBILE__
 		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, 1.f);
+#endif
 	}
 	else
 	{
 		if (mipmap && use_mipmapping)
 		{
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, TexFilter[gl_texture_filter].minfilter);
+#ifndef __MOBILE__
 			if (gl_texture_filter_anisotropic)
 			{
 				glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, gl_texture_filter_anisotropic);
 			}
+#endif
 		}
 		else
 		{
+
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, TexFilter[gl_texture_filter].magfilter);
 		}
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, TexFilter[gl_texture_filter].magfilter);

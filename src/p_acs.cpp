@@ -205,6 +205,10 @@ inline int uallong(const int &foo)
 }
 #endif
 
+inline int ualcharint(uint8_t *bar)
+{
+	return bar[0] | (bar[1] << 8) | (bar[2] << 16) | (bar[3] << 24);
+}
 //============================================================================
 //
 // Global and world variables
@@ -2201,9 +2205,11 @@ bool FBehavior::Init(int lumpnum, FileReader * fr, int len)
 					char *parse = (char *)&chunk[3];
 					for (DWORD j = 0; j < LittleLong(chunk[2]); ++j)
 					{
-						DWORD varNum = LittleLong(*(DWORD *)parse);
+						//DWORD varNum = LittleLong(*(DWORD *)parse);
+						uint32_t varNum = LittleLong(ualcharint((uint8_t*)parse));
 						parse += 4;
-						DWORD expectedSize = LittleLong(*(DWORD *)parse);
+						//DWORD expectedSize = LittleLong(*(DWORD *)parse);
+						uint32_t expectedSize = LittleLong(ualcharint((uint8_t*)parse));
 						parse += 4;
 						int impNum = lib->FindMapArray (parse);
 						if (impNum >= 0)
@@ -2731,27 +2737,28 @@ BYTE *FBehavior::FindChunk (DWORD id) const
 
 	while (chunk != NULL && chunk < Data + DataSize)
 	{
-		if (((DWORD *)chunk)[0] == id)
-		{
-			return chunk;
-		}
-		chunk += LittleLong(((DWORD *)chunk)[1]) + 8;
+		    if (ualcharint(&chunk[0]) == id)
+        		{
+        			return chunk;
+        		}
+        		chunk += LittleLong(ualcharint(&chunk[4])) + 8;
 	}
 	return NULL;
 }
 
 BYTE *FBehavior::NextChunk (BYTE *chunk) const
 {
-	DWORD id = *(DWORD *)chunk;
-	chunk += LittleLong(((DWORD *)chunk)[1]) + 8;
-	while (chunk != NULL && chunk < Data + DataSize)
-	{
-		if (((DWORD *)chunk)[0] == id)
-		{
-			return chunk;
-		}
-		chunk += LittleLong(((DWORD *)chunk)[1]) + 8;
-	}
+    uint32_t id = ualcharint(chunk);
+
+    chunk += LittleLong(ualcharint(&chunk[4])) + 8;
+    while (chunk != NULL && chunk < Data + DataSize)
+    {
+        if (ualcharint(&chunk[0]) == id)
+        {
+            return chunk;
+        }
+        chunk += LittleLong(ualcharint(&chunk[4])) + 8;
+    }
 	return NULL;
 }
 

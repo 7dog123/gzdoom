@@ -143,16 +143,22 @@ void OpenGLFrameBuffer::InitializeState()
 	glEnable(GL_ALPHA_TEST);
 	glDisable(GL_CULL_FACE);
 	glDisable(GL_POLYGON_OFFSET_FILL);
+#ifndef __MOBILE__
 	glEnable(GL_POLYGON_OFFSET_LINE);
+#endif
 	glEnable(GL_BLEND);
+#ifndef __MOBILE__
 	glEnable(GL_DEPTH_CLAMP_NV);
+#endif
 	glDisable(GL_DEPTH_TEST);
 	glEnable(GL_TEXTURE_2D);
 	glDisable(GL_LINE_SMOOTH);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	glAlphaFunc(GL_GEQUAL,0.5f);
 	glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
+#ifndef __MOBILE__
 	glHint(GL_POLYGON_SMOOTH_HINT, GL_NICEST);
+#endif
 	glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST);
 
 	// This was to work around a bug in some older driver. Probably doesn't make sense anymore.
@@ -222,7 +228,9 @@ void OpenGLFrameBuffer::Swap()
 {
 	Finish.Reset();
 	Finish.Clock();
+#ifndef __ANDROID__
 	glFinish();
+#endif
 	if (needsetgamma) 
 	{
 		//DoSetGamma();

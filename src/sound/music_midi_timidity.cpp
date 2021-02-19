@@ -9,7 +9,9 @@
 
 #include <sys/types.h>
 #include <sys/wait.h>
+#ifndef __ANDROID__
 #include <wordexp.h>
+#endif
 #include <signal.h>
 
 int ChildQuit;
@@ -155,7 +157,7 @@ bool TimidityPPMIDIDevice::Preprocess(MIDIStreamer *song, bool looping)
 
 	// Write MIDI song to temporary file
 	song->CreateSMF(midi, looping ? 0 : 1);
-
+Printf(PRINT_BOLD, "diskname = %s\n",DiskName.GetName());
 	f = fopen(DiskName, "wb");
 	if (f == NULL)
 	{
@@ -423,6 +425,8 @@ bool TimidityPPMIDIDevice::LaunchTimidity ()
 		LocalFree (msgBuf);
 	}
 	return false;
+#elif defined(__ANDROID__)
+    return false;
 #else
 	if (WavePipe[0] != -1 && WavePipe[1] == -1 && Stream != NULL)
 	{

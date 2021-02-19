@@ -361,7 +361,7 @@ FString M_GetAutoexecPath()
 
 	char cpath[PATH_MAX];
 	FSRef folder;
-	
+
 	if (noErr == FSFindFolder(kUserDomain, kDocumentsFolderType, kCreateFolder, &folder) &&
 		noErr == FSRefMakePath(&folder, (UInt8*)cpath, PATH_MAX))
 	{
@@ -405,7 +405,7 @@ FString M_GetConfigPath(bool for_reading)
 {
 	char cpath[PATH_MAX];
 	FSRef folder;
-	
+
 	if (noErr == FSFindFolder(kUserDomain, kPreferencesFolderType, kCreateFolder, &folder) &&
 		noErr == FSRefMakePath(&folder, (UInt8*)cpath, PATH_MAX))
 	{
@@ -430,7 +430,7 @@ FString M_GetScreenshotsPath()
 	FString path;
 	char cpath[PATH_MAX];
 	FSRef folder;
-	
+
 	if (noErr == FSFindFolder(kUserDomain, kDocumentsFolderType, kCreateFolder, &folder) &&
 		noErr == FSRefMakePath(&folder, (UInt8*)cpath, PATH_MAX))
 	{
@@ -472,9 +472,28 @@ FString GetUserFile (const char *file)
 {
 	FString path;
 	struct stat info;
+#ifdef __ANDROID__
+ 	path = NicePath("./gzdoom_dev/");
 
+ 	if (stat (path, &info) == -1)
+ 	{
+ 		struct stat extrainfo;
+
+ 		if (stat (path, &extrainfo) == -1)
+ 		{
+ 			if (mkdir (path, S_IRUSR | S_IWUSR | S_IXUSR) == -1)
+ 			{
+ 				//I_FatalError ("Failed to create ./gzdoom/ directory:\n%s", strerror(errno));
+ 			}
+ 		}
+ 	}
+ 	mkdir (path, S_IRUSR | S_IWUSR | S_IXUSR);
+
+ 	path += file;
+ 	return path;
+#else
 	path = NicePath("~/" GAME_DIR "/");
-
+#endif
 	if (stat (path, &info) == -1)
 	{
 		struct stat extrainfo;
@@ -538,6 +557,9 @@ FString M_GetCachePath(bool create)
 	// Don't use GAME_DIR and such so that ZDoom and its child ports can
 	// share the node cache.
 	FString path = NicePath("~/.config/zdoom/cache");
+#ifdef __ANDROID__
+    path = "./user_files/gzdoom_1.9/";
+#endif
 	if (create)
 	{
 		CreatePath(path);
@@ -568,6 +590,17 @@ FString M_GetAutoexecPath()
 
 FString M_GetCajunPath(const char *botfilename)
 {
+#ifdef __ANDROID__
+	FString path = NicePath("./user_files/bots/");
+
+	path << botfilename;
+	if (!FileExists(path))
+	{
+		path = "";
+	}
+
+	return path;
+#else
 	FString path;
 
 	// Check first in ~/.config/zdoom/botfilename.
@@ -583,6 +616,7 @@ FString M_GetCajunPath(const char *botfilename)
 		}
 	}
 	return path;
+#endif
 }
 
 //===========================================================================
@@ -610,7 +644,11 @@ FString M_GetConfigPath(bool for_reading)
 
 FString M_GetScreenshotsPath()
 {
+#ifdef __ANDROID__
+	return NicePath("./user_files/gzdoom_1.9/screenshots/");
+#else
 	return NicePath("~/" GAME_DIR "/screenshots/");
+#endif
 }
 
 //===========================================================================
@@ -623,7 +661,11 @@ FString M_GetScreenshotsPath()
 
 FString M_GetSavegamesPath()
 {
+#ifdef __ANDROID__
+    return NicePath("./user_files/gzdoom_1.9/saves");
+#else
 	return NicePath("~/" GAME_DIR);
+#endif
 }
 
 #endif

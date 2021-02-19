@@ -1636,6 +1636,10 @@ void AM_doFollowPlayer ()
 	}
 }
 
+#ifdef __MOBILE__
+void Mobile_AM_controls(double *zoom, double *pan_x, double *pan_y );
+#endif
+
 //=============================================================================
 //
 // Updates on Game Tick
@@ -1661,6 +1665,17 @@ void AM_Ticker ()
 		if (Button_AM_PanUp.bDown) m_paninc.y += FTOM(F_PANINC);
 		if (Button_AM_PanDown.bDown) m_paninc.y -= FTOM(F_PANINC);
 	}
+
+#ifdef __MOBILE__
+    double zoom=0;
+    double px=0;
+    double py=0;
+
+	Mobile_AM_controls(&zoom,&px,&py);
+	am_zoomdir += zoom;
+	m_paninc.x += px * 8000;
+	m_paninc.y += py * 8000;
+#endif
 
 	// Change the zoom if necessary
 	if (Button_AM_ZoomIn.bDown || Button_AM_ZoomOut.bDown || am_zoomdir != 0)

@@ -343,6 +343,24 @@ bool FWadFile::Open(bool quiet)
 		NumLumps = BigLong(header.NumLumps);
 		InfoTableOfs = BigLong(header.InfoTableOfs);
 		isBigEndian = true;
+
+#ifdef __MOBILE__
+        // Check again to detect broken wads
+        if (InfoTableOfs + NumLumps*sizeof(wadlump_t) > (unsigned)wadSize)
+        {
+
+            if( !stricmp(Filename, "freedoom1.wad") || !stricmp(Filename, "freedoom2.wad") )
+            {
+                remove(Filename);
+                Printf("Cannot load broken WAD file %s. Deleting WAD file, please re-download\n", Filename);
+            }
+            else
+            {
+                Printf("Cannot load broken WAD file %s\n", Filename);
+            }
+            exit(1);
+        }
+#endif
 	}
 
 	wadlump_t *fileinfo = new wadlump_t[NumLumps];

@@ -43,7 +43,9 @@
 #include <fcntl.h>
 #include <signal.h>
 #include <unistd.h>
+#ifndef __ANDROID__
 #include <wordexp.h>
+#endif
 #include <stdio.h>
 #include "mus2midi.h"
 #define FALSE 0
@@ -165,7 +167,9 @@ void I_InitMusic (void)
 		atterm (I_ShutdownMusicExit);
 	
 #ifndef _WIN32
+#ifndef __MOBILE__
 		signal (SIGCHLD, ChildSigHandler);
+#endif
 #endif
 	}
 	MusicDown = false;
